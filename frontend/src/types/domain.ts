@@ -1,0 +1,302 @@
+export type Role = 'ADMIN' | 'DISTRIBUTOR' | 'COMMERCE' | 'DRIVER'
+
+export type User = {
+  id: number
+  email: string
+  full_name: string
+  phone: string
+  role: Role
+  is_active: boolean
+}
+
+export type AuthResponse = {
+  access: string
+  refresh: string
+  user: User
+}
+
+export type Distributor = {
+  id: number
+  business_name: string
+  tax_id: string
+  contact_name: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  province: string
+  currency: string
+  plan_name: string
+  subscription_status: string
+  mercado_pago_link: string
+  can_operate: boolean
+  active: boolean
+}
+
+export type Plan = {
+  id: number
+  name: 'START' | 'PRO' | 'IA' | string
+  price: string
+  description: string
+  currency: string
+  mp_subscription_url: string
+  is_active: boolean
+  sort_order: number
+  is_featured: boolean
+}
+
+export type Product = {
+  id: number
+  distributor: number
+  distributor_name: string
+  supplier: number | null
+  supplier_name: string
+  product_category: number | null
+  category_name: string
+  product_subcategory: number | null
+  subcategory_name: string
+  sku: string
+  barcode: string
+  name: string
+  description: string
+  brand: string
+  category: string
+  subcategory: string
+  unit: string
+  package_size: string
+  length: string
+  width: string
+  height: string
+  dimension_unit: string
+  weight: string
+  weight_unit: string
+  units_per_package: number
+  packages_per_pallet: number | null
+  units_per_pallet: number | null
+  price: string
+  cost: string
+  costo: string
+  discount_percent: string
+  porc_descuento: string
+  discount_name: string
+  nombre_descuento: string
+  characteristics: string
+  caracteristicas: string
+  image_url: string
+  stock_minimum: string
+  stock_on_hand: string
+  stock_available: string
+  low_stock: boolean
+  active: boolean
+}
+
+export type ProductSupplier = {
+  id: number
+  distributor: number
+  distributor_name: string
+  name: string
+  contact_name: string
+  phone: string
+  email: string
+  active: boolean
+}
+
+export type ProductCategory = {
+  id: number
+  distributor: number
+  distributor_name: string
+  name: string
+  active: boolean
+}
+
+export type ProductSubCategory = {
+  id: number
+  distributor: number
+  distributor_name: string
+  category: number
+  category_name: string
+  name: string
+  active: boolean
+}
+
+export type CartItem = {
+  product: Product
+  quantity: number
+}
+
+export type Commerce = {
+  id: number
+  distributor: number | null
+  distributor_name: string
+  trade_name: string
+  legal_name: string
+  tax_id: string
+  contact_name: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  province: string
+  delivery_notes: string
+  active: boolean
+}
+
+export type StockItem = {
+  id: number
+  warehouse_name: string
+  product_name: string
+  sku: string
+  quantity: string
+  reserved_quantity: string
+  available_quantity: string
+  is_low: boolean
+}
+
+export type Vehicle = {
+  id: number
+  plate: string
+  vehicle_type: string
+  brand: string
+  model: string
+  year: number | null
+  capacity_kg: string | null
+  status: string
+  active: boolean
+}
+
+export type DriverProfile = {
+  id: number
+  user_email: string
+  full_name: string
+  license_number: string
+  license_category: string
+  phone: string
+  emergency_contact: string
+  assigned_vehicle_plate: string
+  available: boolean
+  active: boolean
+}
+
+export type OrderItem = {
+  id: number
+  product: number
+  product_name: string
+  sku: string
+  quantity: string
+  price: string
+  subtotal: string
+}
+
+export type Order = {
+  id: number
+  commerce: number
+  commerce_name: string
+  distributor: number
+  distributor_name: string
+  total: string
+  status: string
+  delivery_address: string
+  notes: string
+  items: OrderItem[]
+  created_at: string
+}
+
+export type DeliveryLocation = {
+  id: number
+  latitude: string
+  longitude: string
+  accuracy_m: string | null
+  recorded_at: string
+}
+
+export type Delivery = {
+  id: number
+  order: number
+  order_status: string
+  commerce_name: string
+  driver_name: string
+  vehicle_plate: string
+  status: string
+  last_latitude: string | null
+  last_longitude: string | null
+  last_accuracy_m: string | null
+  last_location_at: string | null
+  locations: DeliveryLocation[]
+}
+
+export type NotificationEvent = {
+  id: number
+  kind: string
+  title: string
+  body: string
+  read_at: string | null
+  delivery_status: string
+  created_at: string
+}
+
+export type ImportJob = {
+  id: number
+  entity_type: string
+  original_filename: string
+  status: string
+  total_rows: number
+  processed_rows: number
+  error_rows: number
+  errors: Array<{ row: number; error: string }>
+  created_at: string
+}
+
+export type DashboardFilters = {
+  date_from: string
+  date_to: string
+  granularity: 'day' | 'week' | 'month'
+  zone: string
+  format?: 'csv' | 'xls'
+}
+
+export type DashboardKpis = {
+  sales_today: number
+  sales_month: number
+  sales_period: number
+  sales_previous_period: number
+  orders: number
+  avg_ticket: number
+  gross_margin_percent: number
+  gross_margin_amount: number
+  active_customers: number
+  repurchase_rate: number
+  low_stock_count: number
+}
+
+export type DashboardPoint = Record<string, string | number | boolean>
+
+export type DashboardBundle = {
+  summary: {
+    filters: DashboardFilters
+    kpis: DashboardKpis
+    pipeline: Array<{ status: string; count: number }>
+  }
+  sales: {
+    series: DashboardPoint[]
+    by_category: DashboardPoint[]
+    top_products: DashboardPoint[]
+    bottom_products: DashboardPoint[]
+    by_zone: DashboardPoint[]
+  }
+  customers: {
+    ranking: DashboardPoint[]
+    portfolio: DashboardPoint[]
+    retention: Record<string, number>
+  }
+  products: {
+    top_skus: DashboardPoint[]
+    bottom_skus: DashboardPoint[]
+    rotation: DashboardPoint[]
+    stock_breaks: DashboardPoint[]
+  }
+  operations: {
+    pipeline: Array<{ status: string; count: number }>
+    metrics: Record<string, number>
+    riders: DashboardPoint[]
+  }
+}

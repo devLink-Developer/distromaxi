@@ -1,0 +1,17 @@
+{
+  "name": "DistroMaxi",
+  "short_name": "DistroMaxi",
+  "description": "Pedidos mayoristas, stock, choferes y tracking en una PWA.",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#0369A1",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,265 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+
+import { api } from '../services/api'
+import type { Plan } from '../types/domain'
+
+const fallbackPlans: Plan[] = []
+
+export function PlansPage() {
+  const [plans, setPlans] = useState<Plan[]>(fallbackPlans)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    void api
+      .plans()
+      .then((data) => {
+        setPlans(data)
+        setError('')
+      })
+      .catch(() => setError('No pudimos cargar los planes. Probá de nuevo en unos minutos.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const activePlans = useMemo(() => plans.filter((plan) => plan.is_active).sort((a, b) => a.sort_order - b.sort_order), [plans])
+  const customersCount = 120
+
+  return (
+    <main className="min-h-dvh bg-slate-50 text-slate-950">
+      <section className="relative isolate min-h-[72dvh] overflow-hidden">
+        <img
+          className="absolute inset-0 h-full w-full object-cover"
+          src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=80"
+          alt="Centro de distribución con pedidos listos para despacho"
+        />
+        <div className="absolute inset-0 bg-emerald-950/70" />
+        <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
+          <Link className="text-lg font-800 text-white" to="/">
+            DistroMaxi
+          </Link>
+          <div className="flex items-center gap-2">
+            <Link className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/login">
+              Ingresar
+            </Link>
+            <Link className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-800 text-emerald-950 transition hover:bg-emerald-50" to="/register">
+              Crear cuenta
+            </Link>
+          </div>
+        </nav>
+        <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-10 sm:px-6 lg:px-8 lg:pt-16">
+          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Activá hoy y empezá a vender en minutos</p>
+          <div className="max-w-4xl">
+            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Vendé más. Automatizá tu distribución. Crecé sin límites.</h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">
+              La plataforma que conecta tus productos con cientos de comercios en minutos para que llegues a más clientes.
+            </p>
+          </div>
+          <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
+            <HeroStat value={`${customersCount}+`} label="comercios activos" />
+            <HeroStat value="24/7" label="pedidos abiertos" />
+            <HeroStat value="3 min" label="para empezar" />
+          </div>
+        </div>
+      </section>
+
+      <section id="planes" className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:px-8">
+        <div className="max-w-3xl">
+          <p className="text-sm font-800 uppercase text-brand-700">Planes</p>
+          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elegí cómo querés crecer</h2>
+          <p className="mt-3 text-base leading-7 text-slate-600">Pagás tu suscripción y empezás a recibir pedidos con un catálogo listo para vender.</p>
+        </div>
+
+        {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-800 text-red-700">{error}</p>}
+        {loading ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {[0, 1, 2].map((item) => (
+              <div key={item} className="h-80 animate-pulse rounded-lg border border-slate-200 bg-white" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-3">
+            {activePlans.map((plan) => (
+              <PlanCard key={plan.name} plan={plan} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="bg-white">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+          <div>
+            <p className="text-sm font-800 uppercase text-mint-700">Beneficios</p>
+            <h2 className="mt-2 text-3xl font-800 text-slate-950">Más pedidos, menos desorden</h2>
+            <p className="mt-3 text-base leading-7 text-slate-600">Tu equipo vende, prepara y reparte con una misma vista de trabajo.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              'Mostrá tu catálogo siempre actualizado',
+              'Llegá a más clientes con tu tienda abierta 24/7',
+              'Tomá pedidos sin llamadas perdidas',
+              'Controlá stock antes de confirmar',
+              'Organizá entregas por chofer y vehículo',
+            ].map((benefit) => (
+              <BenefitItem key={benefit} text={benefit} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:px-8">
+        <div>
+          <p className="text-sm font-800 uppercase text-brand-700">Comparativa</p>
+          <h2 className="mt-2 text-3xl font-800 text-slate-950">Lo esencial para decidir rápido</h2>
+        </div>
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                <tr>
+                  <th className="px-4 py-3">Plan</th>
+                  <th className="px-4 py-3">Pedidos</th>
+                  <th className="px-4 py-3">Estadísticas</th>
+                  <th className="px-4 py-3">Rutas</th>
+                  <th className="px-4 py-3">Venta sugerida</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                <CompareRow plan="START" pedidos="Básico" stats="Inicial" rutas="Manual" venta="No incluida" />
+                <CompareRow plan="PRO" pedidos="Avanzado" stats="Completa" rutas="Control diario" venta="No incluida" />
+                <CompareRow plan="IA" pedidos="Avanzado" stats="Completa" rutas="Optimizada" venta="Incluida" />
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-mint-50">
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-12 sm:px-6 lg:grid-cols-3 lg:px-8">
+          {[
+            ['Mayorista Norte', 'Antes perdíamos pedidos por WhatsApp. Ahora cada comercio compra cuando quiere.'],
+            ['Distribuidora Ruta 8', 'El equipo prepara más rápido y los choferes salen con entregas ordenadas.'],
+            ['Almacenes Unidos', 'Encontramos productos y precios sin pedir listas nuevas cada semana.'],
+          ].map(([name, quote]) => (
+            <blockquote key={name} className="rounded-lg border border-emerald-100 bg-white p-5 shadow-soft">
+              <p className="text-base leading-7 text-slate-700">“{quote}”</p>
+              <footer className="mt-4 font-800 text-slate-950">{name}</footer>
+            </blockquote>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-4xl gap-4 px-4 py-12 sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-800 text-slate-950">Preguntas frecuentes</h2>
+        <FaqItem question="¿Puedo cambiar de plan?" answer="Sí. Podés ajustar el plan cuando tu operación necesite más capacidad." />
+        <FaqItem question="¿El pago se hace en Mercado Pago?" answer="Sí. Cada plan te lleva al link de suscripción correspondiente." />
+        <FaqItem question="¿Necesito cargar todo el catálogo el primer día?" answer="No. Podés empezar con tus productos principales y ampliar después." />
+      </section>
+
+      <section className="bg-brand-700">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div>
+            <h2 className="text-3xl font-800">Activá hoy y empezá a vender en minutos</h2>
+            <p className="mt-2 text-brand-50">Tus comercios compran mejor cuando tu catálogo está siempre disponible.</p>
+          </div>
+          <a className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-5 font-800 text-brand-700 transition hover:bg-brand-50" href="#planes">
+            Ver planes
+          </a>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function PlanCard({ plan }: { plan: Plan }) {
+  const benefits = plan.description
+    .split('.')
+    .map((benefit) => benefit.trim())
+    .filter(Boolean)
+  const featured = plan.is_featured
+
+  return (
+    <article
+      className={`relative rounded-lg border bg-white p-5 shadow-soft ${featured ? 'border-mint-500 ring-2 ring-mint-500' : 'border-slate-200'}`}
+    >
+      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">Más elegido</p>}
+      <h3 className="text-2xl font-800 text-slate-950">{plan.name}</h3>
+      <p className="mt-2 min-h-12 text-sm leading-6 text-slate-600">{plan.description}</p>
+      <p className="mt-5 text-3xl font-800 text-slate-950">
+        {formatPrice(plan.price)}
+        <span className="text-sm font-700 text-slate-500"> / mes</span>
+      </p>
+      <button
+        className={`mt-5 min-h-12 w-full rounded-md px-4 font-800 transition ${
+          featured ? 'bg-mint-500 text-white hover:bg-mint-700' : 'bg-brand-600 text-white hover:bg-brand-700'
+        } disabled:cursor-not-allowed disabled:opacity-50`}
+        type="button"
+        disabled={!plan.mp_subscription_url}
+        onClick={() => {
+          window.location.href = plan.mp_subscription_url
+        }}
+      >
+        Empezar ahora
+      </button>
+      <ul className="mt-5 grid gap-3 text-sm text-slate-700">
+        {benefits.map((benefit) => (
+          <li key={benefit} className="flex gap-2">
+            <CheckIcon />
+            <span>{benefit.trim()}</span>
+          </li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+
+function HeroStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="rounded-lg border border-white/25 bg-white/10 p-4 text-white backdrop-blur-sm">
+      <p className="text-2xl font-800">{value}</p>
+      <p className="mt-1 text-sm text-emerald-50">{label}</p>
+    </div>
+  )
+}
+
+function BenefitItem({ text }: { text: string }) {
+  return (
+    <div className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <CheckIcon />
+      <p className="font-800 text-slate-800">{text}</p>
+    </div>
+  )
+}
+
+function CompareRow({ plan, pedidos, stats, rutas, venta }: { plan: string; pedidos: string; stats: string; rutas: string; venta: string }) {
+  return (
+    <tr>
+      <td className="px-4 py-4 font-800 text-slate-950">{plan}</td>
+      <td className="px-4 py-4 text-slate-700">{pedidos}</td>
+      <td className="px-4 py-4 text-slate-700">{stats}</td>
+      <td className="px-4 py-4 text-slate-700">{rutas}</td>
+      <td className="px-4 py-4 text-slate-700">{venta}</td>
+    </tr>
+  )
+}
+
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  return (
+    <details className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+      <summary className="cursor-pointer font-800 text-slate-950">{question}</summary>
+      <p className="mt-3 leading-7 text-slate-600">{answer}</p>
+    </details>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg className="mt-0.5 h-5 w-5 flex-none text-mint-700" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M4 10.5 8.1 14 16 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function formatPrice(value: string) {
+  return `$${Number(value).toLocaleString('es-AR')}`
+}

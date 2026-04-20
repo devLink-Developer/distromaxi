@@ -1,0 +1,28 @@
+from rest_framework import permissions, viewsets
+
+from .models import Distributor
+from .serializers import DistributorSerializer
+
+
+class DistributorViewSet(viewsets.ModelViewSet):
+    serializer_class = DistributorSerializer
+
+    def get_queryset(self):
+        queryset = Distributor.objects.select_related("owner")
+        user = self.request.user
+        if user.role == "ADMIN" or user.is_superuser:
+            return queryset
+        if user.role == "DISTRIBUTOR":
+            return queryset.filter(owner=user)
+        return queryset.filter(active=True)
+
+    def get_permissions(self):
+        if self.action in {"create", "update", "partial_update", "destroy"}:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        owner = serializer.validated_data.get("owner") or self.request.user
+        serializer.save(owner=owner)
+
+# Create your views here.
