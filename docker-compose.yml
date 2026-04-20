@@ -18,19 +18,19 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     environment:
-      DJANGO_DEBUG: "1"
-      DJANGO_SECRET_KEY: "change-me-in-production"
-      DJANGO_ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
-      POSTGRES_HOST: db
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: distromax
-      POSTGRES_USER: distromax
-      POSTGRES_PASSWORD: distromax
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-1}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-change-me-in-production}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+      POSTGRES_HOST: "${POSTGRES_HOST:-db}"
+      POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
+      POSTGRES_DB: "${POSTGRES_DB:-distromax}"
+      POSTGRES_USER: "${POSTGRES_USER:-distromax}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-distromax}"
       WEBPUSH_VAPID_PUBLIC_KEY: "${WEBPUSH_VAPID_PUBLIC_KEY:-}"
       WEBPUSH_VAPID_PRIVATE_KEY: "${WEBPUSH_VAPID_PRIVATE_KEY:-}"
       WEBPUSH_VAPID_EMAIL: "${WEBPUSH_VAPID_EMAIL:-mailto:admin@distromax.local}"
-      DJANGO_SEED_DEMO: "1"
+      DJANGO_SEED_DEMO: "${DJANGO_SEED_DEMO:-1}"
     depends_on:
       db:
         condition: service_healthy
@@ -42,7 +42,7 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
       args:
-        VITE_API_URL: http://localhost:8000/api
+        VITE_API_URL: "${VITE_API_URL:-/api}"
     depends_on:
       - backend
     ports:

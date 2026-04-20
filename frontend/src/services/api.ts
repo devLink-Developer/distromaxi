@@ -19,7 +19,7 @@ import type {
   DashboardFilters,
 } from '../types/domain'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: BodyInit | Record<string, unknown> | Array<unknown>
