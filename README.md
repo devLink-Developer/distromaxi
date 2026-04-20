@@ -22,11 +22,19 @@ El backend ejecuta migraciones, carga datos demo y levanta Gunicorn. Para push r
 
 ## Ejecutar local
 
+El backend requiere PostgreSQL. No hay fallback a SQLite: si faltan las variables `POSTGRES_*`, Django no arranca.
+
 ```bash
 python -m pip install -r backend/requirements.txt
-python backend/manage.py migrate
-python backend/manage.py seed_demo
-python backend/manage.py runserver
+```
+
+Si ejecutás Django fuera de Docker, configurá `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` en tu shell apuntando a una PostgreSQL disponible.
+
+Con Docker, ejecutá comandos de Django dentro del contenedor backend para usar la PostgreSQL del compose:
+
+```bash
+docker compose exec backend python manage.py migrate --noinput
+docker compose exec backend python manage.py seed_demo
 ```
 
 ```bash
@@ -59,8 +67,8 @@ Todas usan `Demo1234!`.
 ## Verificación
 
 ```bash
-python backend/manage.py check
-python backend/manage.py test apps
+docker compose exec backend python manage.py check
+docker compose exec backend python manage.py test apps
 cd frontend
 npm run test
 npm run build
