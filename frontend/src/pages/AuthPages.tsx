@@ -30,7 +30,7 @@ export function LoginPage() {
   return (
     <AuthShell
       title="Ingresa a DistroMaxi"
-      text="Compra, sigue pedidos o entra a tu panel operativo desde una sola cuenta."
+      text="Compra, mira tus pedidos o entra a tu panel desde una sola cuenta."
     >
       <form className="grid gap-4" onSubmit={submit}>
         <label className="grid gap-1 text-sm font-700 text-slate-700">
@@ -65,13 +65,13 @@ export function LoginPage() {
         </button>
         <div className="grid gap-2 text-sm text-slate-600">
           <p>
-            No tienes cuenta de cliente?{' '}
+            No tenes cuenta de cliente?{' '}
             <Link className="font-800 text-brand-700" to="/register">
               Crear cuenta
             </Link>
           </p>
           <p>
-            Eres distribuidora?{' '}
+            Sos distribuidora?{' '}
             <Link className="font-800 text-brand-700" to="/distributor/register">
               Crear cuenta y elegir plan
             </Link>
@@ -105,7 +105,7 @@ export function RegisterPage() {
         province: form.get('province'),
         password: form.get('password'),
       })
-      setMessage('Cuenta de cliente creada. Ya puedes ingresar.')
+      setMessage('Cuenta de cliente creada. Ya podes ingresar.')
       event.currentTarget.reset()
     } catch (caught) {
       setError(errorMessage(caught, 'No se pudo crear la cuenta. Revisa los datos e intenta otra vez.'))
@@ -172,12 +172,12 @@ export function RegisterPage() {
         </button>
         <div className="grid gap-2 text-sm text-slate-600">
           <p>
-            Las distribuidoras tienen un onboarding aparte con cuenta basica, plan y activacion por suscripcion.
+            Si queres vender con DistroMaxi, entra por la seccion para distribuidoras.
           </p>
           <p>
-            Eres distribuidora?{' '}
+            Sos distribuidora?{' '}
             <Link className="font-800 text-brand-700" to="/planes">
-              Revisar planes
+              Ver planes para distribuidoras
             </Link>
           </p>
         </div>
@@ -207,22 +207,21 @@ function AuthShell({ title, text, children }: { title: string; text: string; chi
           </div>
 
           <div>
-            <p className="text-sm font-800 uppercase tracking-[0.2em] text-brand-100">Canal clientes + operaciones</p>
-            <h1 className="mt-4 text-5xl font-800 leading-tight">Compra mejor, sigue pedidos y entra a tu operacion desde la misma plataforma.</h1>
+            <p className="text-sm font-800 uppercase tracking-[0.2em] text-brand-100">Clientes y distribuidoras</p>
+            <h1 className="mt-4 text-5xl font-800 leading-tight">Compra y vende con recorridos claros desde el primer paso.</h1>
             <p className="mt-5 text-lg leading-8 text-slate-200">
-              Clientes, distribuidoras y choferes entran por flujos distintos, sin mezclar altas publicas con cuentas
-              internas.
+              Cada cuenta entra por su propio camino para que comprar, vender y repartir sea simple desde el inicio.
             </p>
           </div>
 
           <div className="grid gap-4">
             <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Alta publica</p>
-              <p className="mt-3 text-lg font-800">Clientes y distribuidoras se registran por flujos distintos, cada uno con su propio objetivo.</p>
+              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Cuenta de cliente</p>
+              <p className="mt-3 text-lg font-800">Si queres comprar, en pocos pasos ya podes entrar, buscar productos y hacer pedidos.</p>
             </div>
             <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Provision operativa</p>
-              <p className="mt-3 text-lg font-800">Los choferes siguen naciendo desde cada dashboard distribuidor, no desde la landing publica.</p>
+              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Cuenta distribuidora</p>
+              <p className="mt-3 text-lg font-800">Si queres vender, creas tu cuenta, elegis un plan y despues ya podes usar tu panel.</p>
             </div>
           </div>
         </div>

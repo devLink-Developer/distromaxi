@@ -39,7 +39,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       const data = await api.dashboard(get().filters)
       set({ data, loading: false })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'No se pudo cargar el dashboard.', loading: false })
+      set({ error: error instanceof Error ? error.message : 'No pudimos cargar el resumen.', loading: false })
     }
   },
 }))

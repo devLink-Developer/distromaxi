@@ -10,7 +10,7 @@ import { useOrderStore } from '../stores/orderStore'
 import type { Distributor, Order, Product } from '../types/domain'
 
 export function HomePage() {
-  return <DistributorsDirectory title="Elegí una distribuidora" />
+  return <DistributorsDirectory title="Elegi una distribuidora" />
 }
 
 export function DistributorsPage() {
@@ -38,9 +38,7 @@ function DistributorsDirectory({ title }: { title: string }) {
         <div>
           <p className="text-sm font-800 uppercase text-brand-700">Compra mayorista</p>
           <h1 className="mt-2 text-3xl font-800 text-slate-950">{title}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Abrí una distribuidora para ver sus artículos y armar un pedido.
-          </p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Abri una distribuidora para ver su catalogo y armar un pedido.</p>
         </div>
         <Link className="inline-flex min-h-11 items-center justify-center rounded-md bg-brand-600 px-4 font-800 text-white" to="/cart">
           Ver carrito
@@ -51,14 +49,14 @@ function DistributorsDirectory({ title }: { title: string }) {
         <Icon name="search" className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
         <input
           className="min-h-12 w-full rounded-lg border border-slate-300 bg-white pl-11 pr-4 text-base"
-          placeholder="Buscar distribuidora, zona o dirección"
+          placeholder="Buscar distribuidora, zona o direccion"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
       </label>
 
       {filtered.length === 0 ? (
-        <EmptyState title="No hay distribuidoras" text="Probá con otra búsqueda." />
+        <EmptyState title="No hay distribuidoras" text="Proba con otra busqueda." />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((distributor) => (
@@ -79,7 +77,7 @@ function DistributorsDirectory({ title }: { title: string }) {
                 className="mt-4 inline-flex min-h-11 items-center rounded-md bg-brand-600 px-4 font-800 text-white"
                 to={`/distributors/${distributor.id}`}
               >
-                Ver artículos
+                Ver catalogo
               </Link>
             </article>
           ))}
@@ -112,7 +110,7 @@ export function DistributorCatalogPage() {
 
   function addProduct(product: Product) {
     const result = add(product)
-    setNotice(result === 'replaced' ? `Carrito iniciado con ${product.distributor_name}.` : `${product.name} agregado.`)
+    setNotice(result === 'replaced' ? `Empezaste un pedido con ${product.distributor_name}.` : `${product.name} se sumo al pedido.`)
   }
 
   return (
@@ -122,7 +120,7 @@ export function DistributorCatalogPage() {
           <Link className="text-sm font-800 text-brand-700" to="/home">
             Volver a distribuidoras
           </Link>
-          <h1 className="mt-2 text-3xl font-800 text-slate-950">{distributor?.business_name ?? 'Catálogo'}</h1>
+          <h1 className="mt-2 text-3xl font-800 text-slate-950">{distributor?.business_name ?? 'Catalogo'}</h1>
           {distributor && <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{distributor.address}</p>}
         </div>
         <Link className="inline-flex min-h-11 items-center justify-center rounded-md bg-brand-600 px-4 font-800 text-white" to="/cart">
@@ -134,7 +132,7 @@ export function DistributorCatalogPage() {
         <Icon name="search" className="pointer-events-none absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
         <input
           className="min-h-12 w-full rounded-lg border border-slate-300 bg-white pl-11 pr-4 text-base"
-          placeholder="Buscar artículo, SKU, marca o categoría"
+          placeholder="Buscar producto, codigo, marca o categoria"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -143,7 +141,7 @@ export function DistributorCatalogPage() {
       {notice && <p className="rounded-md bg-mint-50 px-3 py-2 text-sm font-800 text-mint-700">{notice}</p>}
 
       {filtered.length === 0 ? (
-        <EmptyState title="No hay artículos" text="Probá otra búsqueda." />
+        <EmptyState title="No encontramos productos" text="Proba con otra busqueda." />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((product) => (
@@ -167,10 +165,10 @@ export function ProductDetailPage() {
 
   function addProduct(nextProduct: Product) {
     const result = add(nextProduct)
-    setNotice(result === 'replaced' ? `Carrito iniciado con ${nextProduct.distributor_name}.` : `${nextProduct.name} agregado.`)
+    setNotice(result === 'replaced' ? `Empezaste un pedido con ${nextProduct.distributor_name}.` : `${nextProduct.name} se sumo al pedido.`)
   }
 
-  if (!product) return <EmptyState title="Cargando artículo" text="Estamos consultando datos de stock y precio." />
+  if (!product) return <EmptyState title="Cargando producto" text="Estamos consultando stock y precio." />
 
   return (
     <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -181,7 +179,7 @@ export function ProductDetailPage() {
       />
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
         <Link className="text-sm font-800 text-brand-700" to={`/distributors/${product.distributor}`}>
-          Volver al catálogo
+          Volver al catalogo
         </Link>
         <p className="mt-4 text-sm font-800 uppercase text-brand-700">{product.category}</p>
         <h1 className="mt-2 text-3xl font-800 text-slate-950">{product.name}</h1>
@@ -189,10 +187,10 @@ export function ProductDetailPage() {
         {product.description && <p className="mt-3 leading-7 text-slate-600">{product.description}</p>}
         {product.characteristics && <p className="mt-3 leading-7 text-slate-600">{product.characteristics}</p>}
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-          <Info label="SKU" value={product.sku} />
+          <Info label="Codigo" value={product.sku} />
           <Info label="Marca" value={product.brand || 'Sin marca'} />
-          <Info label="Sub categoría" value={product.subcategory || 'Sin sub categoría'} />
-          <Info label="Presentación" value={product.package_size || product.unit} />
+          <Info label="Subcategoria" value={product.subcategory || 'Sin subcategoria'} />
+          <Info label="Presentacion" value={product.package_size || product.unit} />
           <Info label="Medidas" value={`${Number(product.length).toLocaleString('es-AR')} x ${Number(product.width).toLocaleString('es-AR')} x ${Number(product.height).toLocaleString('es-AR')} ${product.dimension_unit}`} />
           <Info label="Peso" value={`${Number(product.weight).toLocaleString('es-AR')} ${product.weight_unit}`} />
           <Info label="Unidades por bulto" value={String(product.units_per_package)} />
@@ -204,7 +202,7 @@ export function ProductDetailPage() {
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-3xl font-800 text-slate-950">${Number(product.price).toLocaleString('es-AR')}</p>
           <button className="min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white" type="button" onClick={() => addProduct(product)}>
-            Agregar al carrito
+            Sumar al pedido
           </button>
         </div>
       </div>
@@ -220,7 +218,7 @@ export function CartPage() {
   const distributorId = useCartStore((state) => state.distributorId())
   const distributorName = useCartStore((state) => state.distributorName())
 
-  if (items.length === 0) return <EmptyState title="Carrito vacío" text="Elegí una distribuidora y agregá artículos." />
+  if (items.length === 0) return <EmptyState title="Carrito vacio" text="Elegi una distribuidora y suma productos." />
 
   return (
     <section className="grid gap-5">
@@ -264,7 +262,7 @@ export function CartPage() {
         <p className="text-sm font-700 text-slate-500">Total estimado</p>
         <p className="mt-1 text-3xl font-800 text-slate-950">${total().toLocaleString('es-AR')}</p>
         <Link className="mt-4 inline-flex min-h-12 items-center rounded-md bg-brand-600 px-5 font-800 text-white" to="/checkout">
-          Continuar checkout
+          Seguir con el pedido
         </Link>
       </div>
     </section>
@@ -291,16 +289,16 @@ export function CheckoutPage() {
     navigate(`/tracking/${order.id}`)
   }
 
-  if (items.length === 0) return <EmptyState title="Carrito vacío" text="Agregá artículos de una distribuidora para continuar." />
+  if (items.length === 0) return <EmptyState title="Carrito vacio" text="Suma productos de una distribuidora para continuar." />
 
   return (
     <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h1 className="text-2xl font-800 text-slate-950">Checkout</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">El pedido se confirma con una única distribuidora.</p>
+        <h1 className="text-2xl font-800 text-slate-950">Confirmar pedido</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">El pedido se envia a una sola distribuidora.</p>
         <div className="mt-5 grid gap-4">
           <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Dirección de entrega
+            Direccion de entrega
             <input className="min-h-12 rounded-md border border-slate-300 px-3" value={address} onChange={(event) => setAddress(event.target.value)} />
           </label>
           <label className="grid gap-1 text-sm font-700 text-slate-700">
@@ -308,7 +306,7 @@ export function CheckoutPage() {
             <textarea className="min-h-28 rounded-md border border-slate-300 px-3 py-2" value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
           <button className="min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white" type="button" onClick={() => void submit()}>
-            Confirmar pedido
+            Enviar pedido
           </button>
         </div>
       </div>
@@ -327,7 +325,7 @@ export function OrdersPage() {
     <section className="grid gap-4">
       <h1 className="text-2xl font-800 text-slate-950">Pedidos</h1>
       {orders.length === 0 ? (
-        <EmptyState title="Sin pedidos" text="Los pedidos aparecerán acá cuando se confirmen." />
+        <EmptyState title="Sin pedidos" text="Tus pedidos van a aparecer aca cuando se confirmen." />
       ) : (
         <div className="grid gap-3">
           {orders.map((order) => (
@@ -351,7 +349,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Pr
         <div>
           <p className="text-xs font-800 uppercase text-brand-700">{product.category}</p>
           <h2 className="mt-1 text-lg font-800 text-slate-950">{product.name}</h2>
-          <p className="mt-1 text-sm text-slate-600">{product.sku}</p>
+          <p className="mt-1 text-sm text-slate-600">Codigo {product.sku}</p>
         </div>
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -367,7 +365,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Pr
             className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-center text-sm font-800 text-slate-700"
             to={`/products/${product.id}`}
           >
-            Detalle
+            Ver detalle
           </Link>
           <button
             className="min-h-11 rounded-md bg-brand-600 px-3 text-sm font-800 text-white"
@@ -419,10 +417,10 @@ function OrderRow({ order }: { order: Order }) {
         <StatusBadge status={order.status} />
       </div>
       <p className="mt-3 text-sm text-slate-600">
-        {order.items.length} artículos · ${Number(order.total).toLocaleString('es-AR')}
+        {order.items.length} productos · ${Number(order.total).toLocaleString('es-AR')}
       </p>
       <Link className="mt-4 inline-flex min-h-11 items-center rounded-md border border-brand-200 px-4 font-800 text-brand-700" to={`/tracking/${order.id}`}>
-        Ver tracking
+        Ver seguimiento
       </Link>
     </article>
   )

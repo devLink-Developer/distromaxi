@@ -12,7 +12,7 @@ export function DriverDeliveriesPage() {
   useEffect(() => {
     void api.deliveries().then(setDeliveries)
   }, [])
-  if (deliveries.length === 0) return <EmptyState title="Sin entregas asignadas" text="Las entregas aparecerán cuando la distribuidora las asigne." />
+  if (deliveries.length === 0) return <EmptyState title="Sin entregas asignadas" text="Las entregas van a aparecer cuando la distribuidora las asigne." />
   return (
     <section className="grid gap-4">
       <h1 className="text-2xl font-800 text-slate-950">Mis entregas</h1>
@@ -26,7 +26,7 @@ export function DriverDeliveriesPage() {
             <StatusBadge status={delivery.status} />
           </div>
           <Link className="mt-4 inline-flex min-h-11 items-center rounded-md bg-brand-600 px-4 font-800 text-white" to={`/driver/deliveries/${delivery.id}`}>
-            Abrir tracking
+            Ver detalle
           </Link>
         </article>
       ))}
@@ -47,19 +47,19 @@ export function DriverDeliveryDetailPage() {
 
   function shareLocation() {
     if (!id || !navigator.geolocation) {
-      setMessage('Geolocalización no disponible en este dispositivo.')
+      setMessage('No pudimos usar la ubicacion en este dispositivo.')
       return
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        void sendLocation(Number(id), position).then(() => setMessage('Ubicación enviada.'))
+        void sendLocation(Number(id), position).then(() => setMessage('Ubicacion enviada.'))
       },
-      () => setMessage('No se pudo obtener la ubicación. Revisá los permisos del navegador.'),
+      () => setMessage('No se pudo obtener la ubicacion. Revisa los permisos del navegador.'),
       { enableHighAccuracy: true, timeout: 10000 },
     )
   }
 
-  if (!delivery) return <EmptyState title="Cargando entrega" text="Consultando datos de ruta y pedido." />
+  if (!delivery) return <EmptyState title="Cargando entrega" text="Consultando el pedido y el recorrido." />
   return (
     <section className="grid gap-5">
       <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
@@ -71,7 +71,7 @@ export function DriverDeliveryDetailPage() {
           <StatusBadge status={delivery.status} />
         </div>
         <button className="mt-5 min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white" type="button" onClick={shareLocation}>
-          Enviar ubicación actual
+          Enviar ubicacion actual
         </button>
         {message && <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 text-sm font-800 text-brand-700">{message}</p>}
       </div>
@@ -87,12 +87,12 @@ export function TrackingPage() {
     void api.deliveries().then((items) => setDeliveries(items.filter((delivery) => String(delivery.order) === orderId)))
   }, [orderId])
   const delivery = deliveries[0]
-  if (!delivery) return <EmptyState title="Tracking pendiente" text="La distribuidora todavía no asignó una entrega a este pedido." />
+  if (!delivery) return <EmptyState title="Seguimiento pendiente" text="La distribuidora todavia no asigno una entrega a este pedido." />
   return (
     <section className="grid gap-5">
       <div>
-        <h1 className="text-2xl font-800 text-slate-950">Tracking pedido #{orderId}</h1>
-        <p className="mt-2 text-sm text-slate-600">Seguimiento de la entrega en curso.</p>
+        <h1 className="text-2xl font-800 text-slate-950">Seguimiento del pedido #{orderId}</h1>
+        <p className="mt-2 text-sm text-slate-600">Aca podes ver por donde va la entrega.</p>
       </div>
       <TrackingMap delivery={delivery} />
     </section>
@@ -106,16 +106,16 @@ function TrackingMap({ delivery }: { delivery: Delivery }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
       {mapUrl ? (
-        <iframe className="h-80 w-full border-0" title="Mapa de tracking" src={mapUrl} />
+        <iframe className="h-80 w-full border-0" title="Mapa de seguimiento" src={mapUrl} />
       ) : (
         <div className="grid h-80 place-items-center bg-slate-100 p-6 text-center text-sm font-700 text-slate-600">
-          Sin ubicación reciente. El chofer debe compartir su posición.
+          Sin ubicacion reciente. El chofer tiene que compartir su ubicacion.
         </div>
       )}
       <div className="grid gap-2 p-4 text-sm text-slate-700">
         <p><strong>Chofer:</strong> {delivery.driver_name}</p>
-        <p><strong>Vehículo:</strong> {delivery.vehicle_plate}</p>
-        <p><strong>Última ubicación:</strong> {lat && lng ? `${lat}, ${lng}` : 'pendiente'}</p>
+        <p><strong>Vehiculo:</strong> {delivery.vehicle_plate}</p>
+        <p><strong>Ultima ubicacion:</strong> {lat && lng ? `${lat}, ${lng}` : 'pendiente'}</p>
         <p><strong>Hora:</strong> {delivery.last_location_at ? new Date(delivery.last_location_at).toLocaleString('es-AR') : 'sin datos'}</p>
       </div>
     </div>

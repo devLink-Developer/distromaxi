@@ -45,15 +45,15 @@ export function DashboardPage() {
     <section className="grid gap-3 text-[12px] leading-5 text-slate-700">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[11px] font-800 uppercase text-brand-700">Panel B2B</p>
-          <h1 className="mt-1 text-2xl font-800 text-slate-950">Dashboard distribuidor</h1>
+          <p className="text-[11px] font-800 uppercase text-brand-700">Resumen</p>
+          <h1 className="mt-1 text-2xl font-800 text-slate-950">Panel de tu distribuidora</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="min-h-9 rounded-md border border-slate-300 px-3 font-800 text-slate-700" type="button" onClick={() => void refresh()}>
             Actualizar
           </button>
-          <ExportButton module="sales" format="csv" label="Ventas CSV" filters={filters} />
-          <ExportButton module="products" format="xls" label="Productos Excel" filters={filters} />
+          <ExportButton module="sales" format="csv" label="Descargar ventas" filters={filters} />
+          <ExportButton module="products" format="xls" label="Descargar productos" filters={filters} />
         </div>
       </div>
 
@@ -76,7 +76,7 @@ export function DashboardPage() {
       </div>
 
       {error && <p className="rounded-md bg-red-50 px-3 py-2 font-800 text-red-700">{error}</p>}
-      {loading && !data && <p className="rounded-lg border border-slate-200 bg-white p-4 font-800 text-slate-600">Cargando dashboard...</p>}
+      {loading && !data && <p className="rounded-lg border border-slate-200 bg-white p-4 font-800 text-slate-600">Cargando resumen...</p>}
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
         <Kpi label="Ventas hoy" value={money(kpis?.sales_today)} />
@@ -137,7 +137,7 @@ export function DashboardPage() {
           </ResponsiveContainer>
         </ChartPanel>
         <CompactTable
-          title="Top clientes"
+          title="Clientes que mas compran"
           rows={data?.customers.ranking ?? []}
           columns={[
             ['name', 'Cliente'],
@@ -148,10 +148,10 @@ export function DashboardPage() {
           filters={filters}
         />
         <CompactTable
-          title="SKUs principales"
+          title="Productos mas vendidos"
           rows={data?.products.top_skus ?? []}
           columns={[
-            ['sku', 'SKU'],
+            ['sku', 'Codigo'],
             ['name', 'Producto'],
             ['sales', 'Ingresos', money],
             ['margin', 'Margen', money],
@@ -185,10 +185,10 @@ export function DashboardPage() {
 
       <div className="grid gap-3 xl:grid-cols-3">
         <CompactTable
-          title="Quiebres y cobertura"
+          title="Faltantes y cobertura"
           rows={data?.products.stock_breaks ?? []}
           columns={[
-            ['sku', 'SKU'],
+            ['sku', 'Codigo'],
             ['name', 'Producto'],
             ['available', 'Disp.', num],
             ['days_inventory', 'Dias', num],
@@ -199,7 +199,7 @@ export function DashboardPage() {
           title="Choferes"
           rows={data?.operations.riders ?? []}
           columns={[
-            ['name', 'Rider'],
+            ['name', 'Chofer'],
             ['deliveries', 'Entregas', num],
             ['delivered', 'OK', num],
           ]}
@@ -207,10 +207,10 @@ export function DashboardPage() {
           filters={filters}
         />
         <CompactTable
-          title="Menor venta"
+          title="Productos con menos movimiento"
           rows={data?.sales.bottom_products ?? []}
           columns={[
-            ['sku', 'SKU'],
+            ['sku', 'Codigo'],
             ['name', 'Producto'],
             ['sales', 'Ingresos', money],
           ]}
@@ -251,11 +251,11 @@ export function ProductsManagerPage() {
   return (
     <section className="grid gap-8">
       <ResourceManager
-        title="Articulos"
-        description="Administra el catalogo de venta, datos volumetricos y embalaje."
+        title="Productos"
+        description="Administra tu catalogo de venta, la presentacion y los datos del producto."
         endpoint="products"
         fields={[
-          { name: 'sku', label: 'SKU', required: true },
+          { name: 'sku', label: 'Codigo', required: true },
           { name: 'barcode', label: 'Codigo de barras' },
           { name: 'name', label: 'Nombre', required: true },
           { name: 'brand', label: 'Marca' },
@@ -304,8 +304,8 @@ export function ProductsManagerPage() {
           { name: 'description', label: 'Descripcion', type: 'textarea' },
         ]}
         columns={[
-          { key: 'sku', label: 'SKU' },
-          { key: 'name', label: 'Articulo' },
+          { key: 'sku', label: 'Codigo' },
+          { key: 'name', label: 'Producto' },
           { key: 'supplier_name', label: 'Proveedor' },
           { key: 'category', label: 'Categoria' },
           { key: 'subcategory', label: 'Sub categoria' },
@@ -541,14 +541,14 @@ export function ImportsPage() {
     if (!file) return
     const job = await api.uploadImport(entity, file)
     setJobs((current) => [job, ...current])
-    setResult(`Importacion ${job.status}: ${job.processed_rows} filas procesadas, ${job.error_rows} con error.`)
+    setResult(`Carga ${job.status}: ${job.processed_rows} registros procesados y ${job.error_rows} con error.`)
   }
 
   return (
     <section className="grid gap-5">
       <div>
-        <h1 className="text-2xl font-800 text-slate-950">Importacion CSV</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Importa articulos, clientes, vehiculos, choferes o stock.</p>
+        <h1 className="text-2xl font-800 text-slate-950">Carga de archivos</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">Subi un archivo para actualizar productos, clientes, vehiculos, choferes o stock.</p>
       </div>
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
         <div className="grid gap-4 md:grid-cols-[220px_1fr_auto] md:items-end">
@@ -563,7 +563,7 @@ export function ImportsPage() {
             </select>
           </label>
           <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Archivo CSV
+            Archivo
             <input className="min-h-11 rounded-md border border-slate-300 px-3 py-2" type="file" accept=".csv,text/csv" onChange={(event) => void upload(event)} />
           </label>
           <a className="inline-flex min-h-11 items-center justify-center rounded-md border border-brand-200 px-4 text-sm font-800 text-brand-700" href={`${import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'}/imports/template/${entity}/`}>
@@ -579,12 +579,12 @@ export function ImportsPage() {
               <div>
                 <h2 className="font-800 text-slate-950">{job.entity_type}</h2>
                 <p className="text-sm text-slate-600">
-                  {job.original_filename || 'Carga CSV'} · {job.total_rows} filas
+                  {job.original_filename || 'Archivo cargado'} · {job.total_rows} registros
                 </p>
               </div>
               <StatusBadge status={job.status} />
             </div>
-            {job.error_rows > 0 && <p className="mt-2 text-sm font-700 text-red-700">{job.error_rows} filas con errores.</p>}
+            {job.error_rows > 0 && <p className="mt-2 text-sm font-700 text-red-700">{job.error_rows} registros con errores.</p>}
           </article>
         ))}
       </div>
@@ -599,9 +599,9 @@ export function BillingPage() {
   }, [])
   return (
     <section className="grid gap-4">
-      <h1 className="text-2xl font-800 text-slate-950">Suscripcion</h1>
+      <h1 className="text-2xl font-800 text-slate-950">Tu plan</h1>
       {subscriptions.length === 0 ? (
-        <EmptyState title="Sin suscripcion" text="El admin puede asignar un plan y link de Mercado Pago." />
+        <EmptyState title="Todavia no tenes un plan activo" text="Cuando tengas un plan asignado, lo vas a ver aca." />
       ) : (
         subscriptions.map((subscription) => (
           <article key={Number(subscription.id)} className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
@@ -614,7 +614,7 @@ export function BillingPage() {
             </div>
             {subscription.mercado_pago_link && (
               <a className="mt-4 inline-flex min-h-11 items-center rounded-md bg-brand-600 px-4 font-800 text-white" href={String(subscription.mercado_pago_link)} target="_blank" rel="noreferrer">
-                Abrir Mercado Pago
+                Ver pago
               </a>
             )}
           </article>
@@ -674,7 +674,7 @@ export function DistributorProfilePage() {
   }
 
   if (!profile) {
-    return <EmptyState title="Sin distribuidora activa" text="Esta cuenta todavia no tiene una distribuidora operativa asociada." />
+    return <EmptyState title="Todavia no hay una distribuidora asociada" text="Cuando la cuenta quede lista, vas a ver aca los datos de tu distribuidora." />
   }
 
   return (
@@ -682,9 +682,7 @@ export function DistributorProfilePage() {
       <div>
         <p className="text-sm font-800 uppercase text-brand-700">Direccion principal</p>
         <h1 className="mt-2 text-2xl font-800 text-slate-950">Perfil de la distribuidora</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          Completa la direccion base y la geolocalizacion principal que usa la operacion.
-        </p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Completa la direccion principal y el punto del mapa que usa tu distribuidora.</p>
       </div>
 
       <form className="grid gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-soft" onSubmit={(event) => void submit(event)}>
@@ -731,7 +729,7 @@ export function DistributorProfilePage() {
           </label>
         </div>
         <p className="rounded-[1.25rem] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
-          Usa una sola direccion principal en esta version. Puedes dejar la geolocalizacion cargada con coordenadas decimales.
+          En esta version usamos una sola direccion principal. Si queres, tambien podes guardar el punto del mapa.
         </p>
         {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
         {message && <p className="rounded-md bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">{message}</p>}
@@ -759,11 +757,11 @@ export function AdminDistributorsPage() {
 
   return (
     <ResourceManager
-      title="Admin distribuidoras"
-      description="Crea la cuenta distribuidora desde admin y asigna aqui el usuario DISTRIBUTOR que sera duenio."
+      title="Distribuidoras"
+      description="Crea una distribuidora y elegi la cuenta que la va a administrar."
       endpoint="distributors"
       fields={[
-        { name: 'owner', label: 'Usuario distribuidor', type: 'select', required: true, options: ownerOptions },
+        { name: 'owner', label: 'Cuenta responsable', type: 'select', required: true, options: ownerOptions },
         { name: 'business_name', label: 'Razon social', required: true },
         { name: 'tax_id', label: 'CUIT', required: true },
         { name: 'contact_name', label: 'Contacto', required: true },
@@ -771,11 +769,11 @@ export function AdminDistributorsPage() {
         { name: 'phone', label: 'Telefono', required: true },
         { name: 'address', label: 'Direccion principal' },
         { name: 'plan_name', label: 'Plan' },
-        { name: 'mercado_pago_link', label: 'Link Mercado Pago' },
+        { name: 'mercado_pago_link', label: 'Enlace de pago' },
       ]}
       columns={[
         { key: 'business_name', label: 'Distribuidora' },
-        { key: 'owner_email', label: 'Usuario owner' },
+        { key: 'owner_email', label: 'Cuenta responsable' },
         { key: 'tax_id', label: 'CUIT' },
         { key: 'subscription_status', label: 'Suscripcion' },
         { key: 'active', label: 'Activa' },
@@ -788,7 +786,7 @@ export function AdminUsersPage() {
   return (
     <ResourceManager
       title="Usuarios"
-      description="Crea admins, distribuidores y clientes. Los choferes se crean desde el panel de cada distribuidora."
+      description="Crea cuentas para el equipo y para clientes. Los choferes se cargan desde cada distribuidora."
       endpoint="users"
       fields={[
         { name: 'email', label: 'Email', type: 'email', required: true },
@@ -800,9 +798,9 @@ export function AdminUsersPage() {
           type: 'select',
           required: true,
           options: [
-            { value: 'ADMIN', label: 'ADMIN' },
-            { value: 'DISTRIBUTOR', label: 'DISTRIBUTOR' },
-            { value: 'COMMERCE', label: 'COMMERCE' },
+            { value: 'ADMIN', label: 'Administrador' },
+            { value: 'DISTRIBUTOR', label: 'Distribuidora' },
+            { value: 'COMMERCE', label: 'Cliente' },
           ],
         },
       ]}
@@ -820,8 +818,8 @@ export function AdminSubscriptionsPage() {
   return (
     <section className="grid gap-8">
       <ResourceManager
-        title="Planes de suscripción"
-        description="Configurá los planes publicados, sus precios y la URL de Mercado Pago que usa la landing."
+        title="Planes"
+        description="Edita los planes que se muestran a las distribuidoras, el precio y el enlace de pago."
         endpoint="plans"
         createLabel="Agregar plan"
         allowDelete={false}
@@ -838,30 +836,30 @@ export function AdminSubscriptionsPage() {
             ],
           },
           { name: 'price', label: 'Precio mensual', type: 'number', required: true },
-          { name: 'description', label: 'Descripción comercial', type: 'textarea' },
+          { name: 'description', label: 'Descripcion', type: 'textarea' },
           {
             name: 'mp_subscription_url',
-            label: 'Link Mercado Pago',
+            label: 'Enlace de pago',
             type: 'url',
-            helperText: 'Este link se abre cuando la distribuidora elige el plan en /planes.',
+            helperText: 'Es el enlace que se abre cuando una distribuidora elige este plan.',
           },
           {
             name: 'mp_preapproval_plan_id',
-            label: 'Preapproval plan ID',
-            helperText: 'Identificador canonico del plan en Mercado Pago para conciliar el webhook.',
+            label: 'Codigo del plan de cobro',
+            helperText: 'Sirve para vincular correctamente el plan con el pago.',
           },
           { name: 'currency', label: 'Moneda', required: true },
           { name: 'sort_order', label: 'Orden', type: 'number', required: true },
-          { name: 'max_products', label: 'Máximo de artículos', type: 'number', required: true },
-          { name: 'max_drivers', label: 'Máximo de choferes', type: 'number', required: true },
+          { name: 'max_products', label: 'Maximo de productos', type: 'number', required: true },
+          { name: 'max_drivers', label: 'Maximo de choferes', type: 'number', required: true },
           { name: 'is_active', label: 'Plan visible en la landing', type: 'checkbox' },
-          { name: 'is_featured', label: 'Marcar como más elegido', type: 'checkbox' },
+          { name: 'is_featured', label: 'Marcar como mas elegido', type: 'checkbox' },
         ]}
         columns={[
           { key: 'name', label: 'Plan' },
           { key: 'price', label: 'Precio', format: (value) => money(value) },
-          { key: 'mp_subscription_url', label: 'Link Mercado Pago' },
-          { key: 'mp_preapproval_plan_id', label: 'Plan ID MP' },
+          { key: 'mp_subscription_url', label: 'Enlace de pago' },
+          { key: 'mp_preapproval_plan_id', label: 'Codigo del plan' },
           { key: 'is_active', label: 'Visible', format: yesNo },
           { key: 'is_featured', label: 'Destacado', format: yesNo },
           { key: 'sort_order', label: 'Orden' },
@@ -869,13 +867,13 @@ export function AdminSubscriptionsPage() {
       />
 
       <ResourceManager
-        title="Suscripciones asignadas"
-        description="Asigná planes a distribuidoras y guardá el link de pago asociado a cada cuenta."
+        title="Planes asignados"
+        description="Asigna un plan a una distribuidora y guarda el enlace de pago si hace falta."
         endpoint="subscriptions"
-        createLabel="Asignar suscripción"
+        createLabel="Asignar plan"
         fields={[
-          { name: 'distributor', label: 'ID distribuidora', type: 'number', required: true },
-          { name: 'plan', label: 'ID plan', type: 'number', required: true },
+          { name: 'distributor', label: 'Distribuidora', type: 'number', required: true },
+          { name: 'plan', label: 'Plan', type: 'number', required: true },
           {
             name: 'status',
             label: 'Estado',
@@ -888,7 +886,7 @@ export function AdminSubscriptionsPage() {
               { value: 'SUSPENDED', label: 'Suspendida' },
             ],
           },
-          { name: 'mercado_pago_link', label: 'Link Mercado Pago', type: 'url' },
+          { name: 'mercado_pago_link', label: 'Enlace de pago', type: 'url' },
           { name: 'starts_at', label: 'Inicio', type: 'date' },
           { name: 'expires_at', label: 'Vencimiento', type: 'date' },
           { name: 'notes', label: 'Notas', type: 'textarea' },
@@ -897,7 +895,7 @@ export function AdminSubscriptionsPage() {
           { key: 'distributor_name', label: 'Distribuidora' },
           { key: 'plan_name', label: 'Plan' },
           { key: 'status', label: 'Estado' },
-          { key: 'mercado_pago_link', label: 'Link Mercado Pago' },
+          { key: 'mercado_pago_link', label: 'Enlace de pago' },
           { key: 'expires_at', label: 'Vencimiento' },
         ]}
       />
@@ -906,7 +904,7 @@ export function AdminSubscriptionsPage() {
 }
 
 function yesNo(value: unknown) {
-  return value ? 'Sí' : 'No'
+  return value ? 'Si' : 'No'
 }
 
 function FilterInput({
@@ -968,7 +966,7 @@ function CompactTable({
     <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
         <h2 className="text-[13px] font-800 text-slate-950">{title}</h2>
-        {exportModule && <ExportButton module={exportModule} format="csv" label="CSV" filters={filters} compact />}
+        {exportModule && <ExportButton module={exportModule} format="csv" label="Descargar" filters={filters} compact />}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[12px]">

@@ -10,15 +10,15 @@ const commerceLinks = [
 ]
 
 const distributorLinks = [
-  { to: '/dashboard', label: 'Panel', icon: 'home' as const },
-  { to: '/dashboard/profile', label: 'Perfil', icon: 'pin' as const },
-  { to: '/dashboard/products', label: 'Articulos', icon: 'box' as const },
+  { to: '/dashboard', label: 'Inicio', icon: 'home' as const },
+  { to: '/dashboard/profile', label: 'Mi cuenta', icon: 'pin' as const },
+  { to: '/dashboard/products', label: 'Productos', icon: 'box' as const },
   { to: '/dashboard/stock', label: 'Stock', icon: 'orders' as const },
   { to: '/dashboard/customers', label: 'Clientes', icon: 'users' as const },
   { to: '/dashboard/drivers', label: 'Choferes', icon: 'route' as const },
   { to: '/dashboard/vehicles', label: 'Vehiculos', icon: 'truck' as const },
-  { to: '/dashboard/imports', label: 'Importar', icon: 'upload' as const },
-  { to: '/dashboard/billing', label: 'Cobro', icon: 'wallet' as const },
+  { to: '/dashboard/imports', label: 'Cargas', icon: 'upload' as const },
+  { to: '/dashboard/billing', label: 'Plan', icon: 'wallet' as const },
 ]
 
 const driverLinks = [
@@ -63,7 +63,7 @@ export function AppLayout() {
               <Brand compact />
             </div>
             <div className="hidden lg:block">
-              <p className="text-sm font-semibold text-slate-500">Sesion activa</p>
+              <p className="text-sm font-semibold text-slate-500">Tu cuenta</p>
               <p className="text-base font-700 text-slate-950">{user?.full_name}</p>
             </div>
             <button
@@ -105,7 +105,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div>
           <p className="text-lg font-800 text-slate-950">DistroMaxi</p>
-          <p className="text-xs font-semibold text-slate-500">Operaciones</p>
+          <p className="text-xs font-semibold text-slate-500">Pedidos y entregas</p>
         </div>
       )}
     </div>

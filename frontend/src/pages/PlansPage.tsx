@@ -48,7 +48,7 @@ export function PlansPage() {
       const response = await api.selectDistributorPlan(plan.id)
       window.location.assign(response.checkout_url)
     } catch (caught) {
-      setError(errorMessage(caught, 'No pudimos preparar el checkout. Revisa la configuracion del plan e intenta otra vez.'))
+      setError(errorMessage(caught, 'No pudimos abrir el pago. Revisa el plan e intenta otra vez.'))
     } finally {
       setCheckoutPlanId(null)
     }
@@ -80,17 +80,15 @@ export function PlansPage() {
           </div>
         </nav>
         <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-10 sm:px-6 lg:px-8 lg:pt-16">
-          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Pantalla comercial para distribuidoras</p>
+          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Para distribuidoras</p>
           <div className="max-w-4xl">
-            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Vende mas. Automatiza tu distribucion. Crece sin romper la operacion.</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">
-              Abre tu cuenta basica, elige un plan y activa la distribuidora usando la suscripcion de servicios actual de Mercado Pago.
-            </p>
+            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Empeza a vender online con un plan pensado para tu distribuidora.</h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">Crea tu cuenta, elegi un plan y segui al pago para dejar tu cuenta lista y empezar a vender.</p>
           </div>
           <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
-            <HeroStat value={`${customersCount}+`} label="comercios activos" />
-            <HeroStat value="3 pasos" label="cuenta, plan y activacion" />
-            <HeroStat value="Webhook" label="confirmacion real antes de entrar al dashboard" />
+            <HeroStat value={`${customersCount}+`} label="negocios comprando con DistroMaxi" />
+            <HeroStat value="3 pasos" label="cuenta, plan y pago" />
+            <HeroStat value="Alta guiada" label="seguimos el proceso hasta que tu cuenta quede lista" />
           </div>
         </div>
       </section>
@@ -100,16 +98,16 @@ export function PlansPage() {
           <div className="rounded-[2rem] border border-brand-200 bg-white p-6 shadow-soft">
             <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Paso 2 de 3</p>
             <h2 className="mt-3 text-2xl font-800 text-slate-950">
-              {distributorIsActive ? 'Tu cuenta ya esta activa.' : 'Tu cuenta basica ya esta lista. Falta elegir plan.'}
+              {distributorIsActive ? 'Tu cuenta ya esta lista.' : 'Tu cuenta ya esta creada. Falta elegir un plan.'}
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
               {distributorIsActive
-                ? 'Puedes revisar tu suscripcion actual y seguir configurando la operacion desde el panel.'
-                : 'Al seleccionar un plan lo registramos primero en backend y despues te enviamos al link actual de suscripcion. La activacion definitiva ocurre cuando llega el webhook de Mercado Pago.'}
+                ? 'Podes revisar tu plan actual y seguir configurando tu distribuidora desde el panel.'
+                : 'Elegi un plan para seguir. Despues te llevamos al pago y te avisamos cuando la cuenta quede lista.'}
             </p>
             {!distributorIsActive && (
               <Link className="mt-5 inline-flex min-h-11 items-center rounded-full border border-slate-300 px-4 text-sm font-800 text-slate-700 transition hover:bg-slate-50" to="/distributor/onboarding">
-                Ver estado del onboarding
+                Ver como sigue el alta
               </Link>
             )}
           </div>
@@ -117,10 +115,8 @@ export function PlansPage() {
 
         <div className="max-w-3xl">
           <p className="text-sm font-800 uppercase text-brand-700">Planes</p>
-          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elige como quieres crecer</h2>
-          <p className="mt-3 text-base leading-7 text-slate-600">
-            Puedes revisar la propuesta comercial sin iniciar sesion. Para avanzar al checkout debes crear antes la cuenta distribuidora.
-          </p>
+          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elegi el plan para tu distribuidora</h2>
+          <p className="mt-3 text-base leading-7 text-slate-600">Podes mirar los planes sin registrarte. Para seguir al pago primero tenes que crear tu cuenta.</p>
         </div>
 
         {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-800 text-red-700">{error}</p>}
@@ -212,16 +208,16 @@ export function PlansPage() {
 
       <section className="mx-auto grid max-w-4xl gap-4 px-4 py-12 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-800 text-slate-950">Preguntas frecuentes</h2>
-        <FaqItem question="Puedo revisar planes sin crear cuenta?" answer="Si. La pantalla sigue siendo publica, pero el checkout solo se habilita despues de crear la cuenta distribuidora." />
-        <FaqItem question="El pago se hace en Mercado Pago?" answer="Si. Cada plan sigue usando el link actual de suscripcion por servicios." />
-        <FaqItem question="La cuenta se activa con el regreso del navegador?" answer="No. La activacion real ocurre cuando DistroMaxi confirma la suscripcion por webhook." />
+        <FaqItem question="Puedo mirar planes sin crear cuenta?" answer="Si. Los planes se pueden ver sin registrarte. Para seguir al pago primero tenes que crear tu cuenta." />
+        <FaqItem question="Donde hago el pago?" answer="El pago se hace en Mercado Pago, desde el plan que elijas." />
+        <FaqItem question="Cuando queda lista mi cuenta?" answer="Cuando el pago se confirma. Si tarda unos minutos, esta pantalla se actualiza sola." />
       </section>
 
       <section className="bg-brand-700">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <h2 className="text-3xl font-800">Activa el plan y entra a tu panel solo cuando la suscripcion este confirmada.</h2>
-            <p className="mt-2 text-brand-50">Cuenta basica primero, checkout despues, dashboard solo con confirmacion backend.</p>
+            <h2 className="text-3xl font-800">Elegi tu plan y deja tu cuenta lista para empezar a vender.</h2>
+            <p className="mt-2 text-brand-50">Primero completas tus datos, despues seguis al pago y cuando quede aprobado entras a tu panel.</p>
           </div>
           <a className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-5 font-800 text-brand-700 transition hover:bg-brand-50" href="#planes">
             Ver planes
@@ -255,14 +251,14 @@ function PlanCard({
   const unavailable = !plan.mp_subscription_url || !plan.mp_preapproval_plan_id
   const isDisabled = loading || (!activeDistributor && unavailable)
   const buttonText = activeDistributor
-    ? 'Ir a mi suscripcion'
+    ? 'Ver mi plan'
     : requiresSignup
-      ? 'Crear cuenta para continuar'
+      ? 'Crear cuenta para seguir'
       : loading
-        ? 'Abriendo checkout...'
+        ? 'Abriendo pago...'
         : unavailable
           ? 'Plan no disponible'
-          : 'Elegir este plan'
+          : 'Elegir plan'
 
   return (
     <article
@@ -287,10 +283,10 @@ function PlanCard({
       </button>
       <p className="mt-3 text-xs leading-5 text-slate-500">
         {activeDistributor
-          ? 'Tu cuenta ya esta activa. Puedes revisar la suscripcion desde el dashboard.'
+          ? 'Tu cuenta ya esta lista. Podes revisar tu plan desde el panel.'
           : requiresSignup
-            ? 'Primero creamos tu cuenta distribuidora y luego te enviamos al checkout.'
-            : 'Registramos el plan elegido antes de abrir el checkout actual de Mercado Pago.'}
+            ? 'Primero te pedimos unos datos basicos y despues seguis al pago.'
+            : 'Guardamos tu eleccion y despues te llevamos al pago.'}
       </p>
       <ul className="mt-5 grid gap-3 text-sm text-slate-700">
         {benefits.map((benefit) => (

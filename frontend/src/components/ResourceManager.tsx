@@ -60,7 +60,7 @@ export function ResourceManager({
       const data = await api.list<Row>(endpoint)
       setRows(data)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudieron cargar los datos.')
+      setError(caught instanceof Error ? caught.message : 'No pudimos cargar la informacion.')
     } finally {
       setLoading(false)
     }
@@ -119,12 +119,12 @@ export function ResourceManager({
       await load()
       await onSaved?.()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo guardar.')
+      setError(caught instanceof Error ? caught.message : 'No pudimos guardar los cambios.')
     }
   }
 
   async function onDelete(row: Row) {
-    const confirmed = window.confirm('Eliminar este registro?')
+    const confirmed = window.confirm('Eliminar este dato?')
     if (!confirmed) return
     await api.remove(endpoint, row.id)
     await load()
@@ -152,9 +152,9 @@ export function ResourceManager({
       {error && !showForm && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
 
       {loading ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando datos...</div>
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando informacion...</div>
       ) : rows.length === 0 ? (
-        <EmptyState title="Sin registros" text="Usa Agregar para crear el primer registro." />
+        <EmptyState title="Todavia no hay datos" text="Usa el boton Agregar para cargar el primero." />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
           <div className="hidden overflow-x-auto md:block">
@@ -281,7 +281,7 @@ function ResourceField({ field, value }: { field: FieldConfig; value: unknown })
           defaultValue={String(value ?? '')}
           required={field.required}
         >
-          <option value="">Seleccionar</option>
+          <option value="">Elegi una opcion</option>
           {(field.options ?? []).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

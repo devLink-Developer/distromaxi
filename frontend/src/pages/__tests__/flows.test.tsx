@@ -280,7 +280,7 @@ describe('DistroMaxi frontend flows', () => {
     await userEvent.type(screen.getByLabelText(/telefono/i), '1111-2222')
     await userEvent.type(screen.getByLabelText(/cuit/i), '30-12345678-9')
     await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
-    await userEvent.click(screen.getByRole('button', { name: /continuar a planes/i }))
+    await userEvent.click(screen.getByRole('button', { name: /seguir con los planes/i }))
 
     await waitFor(() => {
       expect(localStorage.getItem('distromax_access')).toBe('dist-access')
@@ -299,7 +299,7 @@ describe('DistroMaxi frontend flows', () => {
     )
 
     expect(await screen.findByText('Distribuidora Andina')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /ver art/i })).toHaveAttribute('href', '/distributors/1')
+    expect(screen.getByRole('link', { name: /ver catalogo/i })).toHaveAttribute('href', '/distributors/1')
   })
 
   it('renders subscription plans from the API', async () => {
@@ -338,7 +338,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText(/vende mas\. automatiza tu distribucion/i)).toBeInTheDocument()
+    expect(screen.getByText(/empeza a vender online con un plan pensado para tu distribuidora/i)).toBeInTheDocument()
     expect(await screen.findByText('START')).toBeInTheDocument()
     expect(screen.getByText('Mas elegido')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/plans'), expect.any(Object))
@@ -422,7 +422,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    await userEvent.click(await screen.findByRole('button', { name: /elegir este plan/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /elegir plan/i }))
 
     await waitFor(() => {
       const selectPlanCall = vi
@@ -483,14 +483,14 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/planes de suscrip/i)).toBeInTheDocument()
+    expect(await screen.findByText(/edita los planes que se muestran/i)).toBeInTheDocument()
 
     await userEvent.click(screen.getAllByRole('button', { name: /editar/i })[0])
-    const urlInput = screen.getByLabelText(/link mercado pago/i)
+    const urlInput = screen.getByLabelText(/enlace de pago/i)
     await userEvent.clear(urlInput)
     await userEvent.type(urlInput, updatedUrl)
-    await userEvent.clear(screen.getByLabelText(/preapproval plan id/i))
-    await userEvent.type(screen.getByLabelText(/preapproval plan id/i), 'start-updated')
+    await userEvent.clear(screen.getByLabelText(/codigo del plan de cobro/i))
+    await userEvent.type(screen.getByLabelText(/codigo del plan de cobro/i), 'start-updated')
     await userEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
 
     await waitFor(() => {
@@ -513,7 +513,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Hace tus pedidos a distribuidoras desde un solo lugar.')).toBeInTheDocument()
+    expect(screen.getByText('Hace tus pedidos desde un solo lugar.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /quiero vender con distromaxi/i })).toHaveAttribute('href', '/planes')
   })
 
@@ -577,7 +577,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: /confirmar pedido/i }))
+    await userEvent.click(screen.getByRole('button', { name: /enviar pedido/i }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(

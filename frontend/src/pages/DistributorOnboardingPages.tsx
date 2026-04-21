@@ -8,9 +8,9 @@ import type { DistributorOnboardingState } from '../types/domain'
 import { defaultRouteForUser } from '../utils/authRouting'
 
 const distributorSteps = [
-  { title: 'Cuenta', text: 'Creamos tu usuario distribuidor con datos basicos.' },
-  { title: 'Plan', text: 'Eliges el plan y salis al checkout actual de Mercado Pago.' },
-  { title: 'Activacion', text: 'El backend confirma la suscripcion por webhook y habilita tu panel.' },
+  { title: 'Cuenta', text: 'Creamos tu cuenta con los datos principales.' },
+  { title: 'Plan', text: 'Elegi el plan que mejor se adapte a tu distribuidora.' },
+  { title: 'Activacion', text: 'Cuando el pago queda confirmado, habilitamos tu panel.' },
 ]
 
 export function DistributorRegisterPage() {
@@ -45,7 +45,7 @@ export function DistributorRegisterPage() {
       const chosenPlan = searchParams.get('plan')
       navigate(chosenPlan ? `/planes?plan=${encodeURIComponent(chosenPlan)}` : '/planes', { replace: true })
     } catch (caught) {
-      setError(errorMessage(caught, 'No se pudo crear la cuenta distribuidora. Revisa los datos e intenta otra vez.'))
+      setError(errorMessage(caught, 'No pudimos crear la cuenta. Revisa los datos e intenta otra vez.'))
     } finally {
       setLoading(false)
     }
@@ -53,21 +53,21 @@ export function DistributorRegisterPage() {
 
   return (
     <DistributorShell
-      badge="Alta comercial"
+      badge="Para distribuidoras"
       title="Crea tu cuenta distribuidora"
-      text="Abre tu cuenta con datos basicos y continua directo a la seleccion de plan. La activacion final ocurre cuando Mercado Pago confirma la suscripcion."
-      asideTitle="Flujo guiado"
-      asideText="Separado del dashboard para que primero cierres cuenta, plan y activacion sin mezclar configuracion operativa."
+      text="Dejanos tus datos basicos y despues elegi el plan con el que queres empezar a vender."
+      asideTitle="Como sigue"
+      asideText="Primero completas tus datos, despues elegis un plan y cuando el pago quede aprobado te avisamos por esta misma pantalla."
       footer={
         <div className="grid gap-2 text-sm text-slate-600">
           <p>
-            Ya tienes una cuenta pendiente?{' '}
+            Ya tenes una cuenta?{' '}
             <Link className="font-800 text-brand-700" to="/login">
               Ingresar
             </Link>
           </p>
           <p>
-            Solo quieres revisar planes?{' '}
+            Solo queres ver los planes?{' '}
             <Link className="font-800 text-brand-700" to="/planes">
               Ver planes
             </Link>
@@ -113,7 +113,7 @@ export function DistributorRegisterPage() {
           </label>
         </div>
         <p className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-700 leading-6 text-emerald-900">
-          La direccion principal se completa despues desde tu panel, cuando la suscripcion ya este confirmada.
+          La direccion principal la completas mas adelante desde tu panel.
         </p>
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
         <button
@@ -121,7 +121,7 @@ export function DistributorRegisterPage() {
           disabled={loading}
           type="submit"
         >
-          {loading ? 'Creando cuenta...' : 'Continuar a planes'}
+          {loading ? 'Creando cuenta...' : 'Seguir con los planes'}
         </button>
       </form>
     </DistributorShell>
@@ -147,7 +147,7 @@ export function DistributorOnboardingPage() {
           setError('')
         }
       } catch (caught) {
-        if (!cancelled) setError(errorMessage(caught, 'No pudimos cargar el estado del onboarding.'))
+        if (!cancelled) setError(errorMessage(caught, 'No pudimos cargar el estado de tu cuenta.'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -189,7 +189,7 @@ export function DistributorOnboardingPage() {
       setOnboarding(response.onboarding)
       window.location.assign(response.checkout_url)
     } catch (caught) {
-      setError(errorMessage(caught, 'No pudimos reabrir el checkout. Intenta nuevamente.'))
+      setError(errorMessage(caught, 'No pudimos volver a abrir el pago. Intenta nuevamente.'))
     } finally {
       setCheckoutLoading(false)
     }
@@ -199,9 +199,9 @@ export function DistributorOnboardingPage() {
     return (
       <main className="grid min-h-dvh place-items-center bg-slate-50 px-4">
         <div className="w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-soft">
-          <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Onboarding distribuidora</p>
-          <h1 className="mt-3 text-3xl font-800 text-slate-950">Validando tu estado</h1>
-          <p className="mt-3 text-sm leading-7 text-slate-600">Estamos consultando si tu suscripcion ya fue confirmada.</p>
+          <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Cuenta distribuidora</p>
+          <h1 className="mt-3 text-3xl font-800 text-slate-950">Estamos revisando tu cuenta</h1>
+          <p className="mt-3 text-sm leading-7 text-slate-600">En unos segundos te mostramos como sigue.</p>
         </div>
       </main>
     )
@@ -225,9 +225,9 @@ export function DistributorOnboardingPage() {
           </div>
         </nav>
         <div className="relative z-10 mx-auto max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8">
-          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Acceso limitado hasta confirmar suscripcion</p>
+          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Estamos preparando tu cuenta</p>
           <h1 className="mt-5 max-w-4xl text-4xl font-800 leading-tight text-white sm:text-5xl">
-            {onboarding?.business_name || user?.full_name || 'Tu distribuidora'} esta en proceso de activacion.
+            {onboarding?.business_name || user?.full_name || 'Tu distribuidora'} esta cada vez mas cerca de empezar a vender.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-8 text-emerald-50">
             {statusCopy(onboarding).description}
@@ -243,7 +243,7 @@ export function DistributorOnboardingPage() {
           <StatusPanel onboarding={onboarding} />
           {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
           <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft">
-            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Tu cuenta</p>
+            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Datos de tu cuenta</p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <InfoRow label="Razon social" value={onboarding?.business_name ?? '-'} />
               <InfoRow label="CUIT" value={onboarding?.tax_id ?? '-'} />
@@ -252,13 +252,13 @@ export function DistributorOnboardingPage() {
             </div>
           </article>
           <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft">
-            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Siguiente accion</p>
+            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Que queres hacer ahora</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
                 className="inline-flex min-h-12 items-center justify-center rounded-full bg-slate-950 px-5 font-800 text-white transition hover:bg-slate-800"
                 to="/planes"
               >
-                Revisar o cambiar plan
+                Ver o cambiar plan
               </Link>
               {Boolean(onboarding?.selected_plan?.mp_subscription_url) && (
                 <button
@@ -267,7 +267,7 @@ export function DistributorOnboardingPage() {
                   type="button"
                   onClick={() => void reopenCheckout()}
                 >
-                  {checkoutLoading ? 'Abriendo checkout...' : 'Abrir checkout otra vez'}
+                  {checkoutLoading ? 'Abriendo pago...' : 'Volver al pago'}
                 </button>
               )}
             </div>
@@ -276,7 +276,7 @@ export function DistributorOnboardingPage() {
 
         <div className="grid gap-5">
           <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft">
-            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Plan seleccionado</p>
+            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Plan elegido</p>
             {onboarding?.selected_plan ? (
               <div className="mt-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -292,12 +292,12 @@ export function DistributorOnboardingPage() {
               </div>
             ) : (
               <p className="mt-4 rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-600">
-                Todavia no elegiste un plan. Entra a la pantalla comercial y selecciona una suscripcion para seguir.
+                Todavia no elegiste un plan. Entra a la seccion de planes para seguir.
               </p>
             )}
           </article>
           <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft">
-            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Que pasa despues</p>
+            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Como sigue</p>
             <div className="mt-4 grid gap-3">
               {distributorSteps.map((step, index) => (
                 <div key={step.title} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
@@ -362,8 +362,8 @@ function DistributorShell({
               <p className="mt-3 text-lg font-800">{asideText}</p>
             </div>
             <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Mercado Pago</p>
-              <p className="mt-3 text-lg font-800">Seguimos usando la suscripcion por servicio del plan actual. La activacion final ocurre por webhook, no por la vuelta del navegador.</p>
+              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Pago</p>
+              <p className="mt-3 text-lg font-800">El pago se hace en Mercado Pago y esta pantalla te avisa cuando la cuenta queda lista.</p>
             </div>
           </div>
         </div>
@@ -451,36 +451,36 @@ function statusCopy(onboarding: DistributorOnboardingState | null) {
   switch (onboarding?.access_state) {
     case 'ACTIVE':
       return {
-        eyebrow: 'Cuenta activa',
-        title: 'La suscripcion ya fue confirmada.',
-        description: 'Tu cuenta distribuidora ya puede entrar al panel operativo. Estamos actualizando tu acceso.',
+        eyebrow: 'Cuenta lista',
+        title: 'Tu plan ya esta confirmado.',
+        description: 'Tu distribuidora ya puede entrar al panel. Estamos actualizando tu acceso.',
         note: '',
         classes: 'border-emerald-200 bg-emerald-50 text-emerald-950',
       }
     case 'REVIEW_REQUIRED':
       return {
-        eyebrow: 'Revision manual',
-        title: 'Necesitamos revisar la conciliacion.',
-        description: 'La notificacion llego, pero no cerro de forma automatica con los datos esperados.',
-        note: onboarding.review_reason || 'Puedes reabrir el checkout o contactar al equipo interno para validarlo.',
+        eyebrow: 'Necesitamos revisarlo',
+        title: 'Estamos chequeando tu pago.',
+        description: 'Nos llego un aviso y estamos terminando de validar la cuenta.',
+        note: onboarding.review_reason || 'Si queres, podes volver a intentar el pago o esperar nuestra confirmacion.',
         classes: 'border-amber-200 bg-amber-50 text-amber-950',
       }
     case 'FAILED':
       return {
-        eyebrow: 'Suscripcion no activada',
-        title: 'Todavia no pudimos habilitar la cuenta.',
-        description: 'Mercado Pago informo que la suscripcion no quedo autorizada.',
-        note: onboarding.failure_reason || 'Puedes volver a abrir el checkout y completar el alta.',
+        eyebrow: 'No pudimos terminar el alta',
+        title: 'El pago no pudo confirmarse.',
+        description: 'Tu cuenta sigue guardada para que puedas intentarlo de nuevo cuando quieras.',
+        note: onboarding.failure_reason || 'Podes volver al pago y terminar el alta.',
         classes: 'border-red-200 bg-red-50 text-red-950',
       }
     default:
       return {
-        eyebrow: 'Esperando confirmacion',
-        title: onboarding?.selected_plan ? 'Estamos validando tu suscripcion.' : 'Primero debes elegir un plan.',
+        eyebrow: 'Seguimos con el alta',
+        title: onboarding?.selected_plan ? 'Estamos revisando tu pago.' : 'Falta elegir un plan.',
         description: onboarding?.selected_plan
-          ? 'Cuando Mercado Pago confirme la suscripcion por webhook, tu cuenta se activara sola y te llevaremos al dashboard.'
-          : 'Tu cuenta provisional ya existe. Ahora entra a la pantalla comercial y selecciona el plan con el que quieres operar.',
-        note: onboarding?.selected_plan ? 'Si ya pagaste, no hace falta repetirlo: esta pantalla se actualiza automaticamente.' : '',
+          ? 'Apenas el pago quede confirmado, tu cuenta va a quedar lista y vas a poder entrar al panel.'
+          : 'Tu cuenta ya esta creada. Ahora elegi el plan con el que queres empezar.',
+        note: onboarding?.selected_plan ? 'Si ya pagaste, no hace falta repetirlo: esta pantalla se actualiza sola.' : '',
         classes: 'border-brand-200 bg-brand-50 text-slate-950',
       }
   }
