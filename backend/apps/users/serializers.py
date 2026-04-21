@@ -50,7 +50,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         default=UserRole.COMMERCE,
     )
     trade_name = serializers.CharField(write_only=True)
-    address = serializers.CharField(write_only=True)
+    address = serializers.CharField(write_only=True, required=False, allow_blank=True)
     city = serializers.CharField(write_only=True, required=False, allow_blank=True)
     province = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
@@ -64,7 +64,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password")
         validated_data.pop("role", None)
         trade_name = validated_data.pop("trade_name")
-        address = validated_data.pop("address")
+        address = validated_data.pop("address", "")
         city = validated_data.pop("city", "")
         province = validated_data.pop("province", "")
         user = User.objects.create_user(password=password, role=UserRole.COMMERCE, **validated_data)

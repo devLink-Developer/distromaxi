@@ -11,10 +11,11 @@ const commerceLinks = [
 
 const distributorLinks = [
   { to: '/dashboard', label: 'Inicio', icon: 'home' as const },
-  { to: '/dashboard/profile', label: 'Mi cuenta', icon: 'pin' as const },
+  { to: '/dashboard/orders', label: 'Pedidos', icon: 'orders' as const },
   { to: '/dashboard/products', label: 'Productos', icon: 'box' as const },
   { to: '/dashboard/stock', label: 'Stock', icon: 'orders' as const },
   { to: '/dashboard/customers', label: 'Clientes', icon: 'users' as const },
+  { to: '/dashboard/profile', label: 'Mi cuenta', icon: 'pin' as const },
   { to: '/dashboard/drivers', label: 'Choferes', icon: 'route' as const },
   { to: '/dashboard/vehicles', label: 'Vehiculos', icon: 'truck' as const },
   { to: '/dashboard/imports', label: 'Cargas', icon: 'upload' as const },

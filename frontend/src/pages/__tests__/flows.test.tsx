@@ -183,12 +183,9 @@ describe('DistroMaxi frontend flows', () => {
     expect(screen.queryByLabelText(/^rol$/i)).not.toBeInTheDocument()
 
     await userEvent.type(screen.getByLabelText(/nombre completo/i), 'Ana Perez')
-    await userEvent.type(screen.getByLabelText(/nombre del negocio/i), 'Almacen Ana')
+    await userEvent.type(screen.getByLabelText(/nombre comercial/i), 'Almacen Ana')
     await userEvent.type(screen.getByLabelText(/^email$/i), 'ana@test.local')
     await userEvent.type(screen.getByLabelText(/telefono/i), '1111-2222')
-    await userEvent.type(screen.getByLabelText(/direccion de entrega/i), 'Calle 123')
-    await userEvent.type(screen.getByLabelText(/ciudad/i), 'CABA')
-    await userEvent.type(screen.getByLabelText(/provincia/i), 'Buenos Aires')
     await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
 
     await userEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
@@ -201,11 +198,11 @@ describe('DistroMaxi frontend flows', () => {
         trade_name: 'Almacen Ana',
         email: 'ana@test.local',
         phone: '1111-2222',
-        address: 'Calle 123',
-        city: 'CABA',
-        province: 'Buenos Aires',
       })
       expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('role')
+      expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('address')
+      expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('city')
+      expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('province')
     })
 
     expect(await screen.findByText(/cuenta de cliente creada/i)).toBeInTheDocument()

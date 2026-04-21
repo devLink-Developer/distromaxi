@@ -24,9 +24,6 @@ class PublicRegisterTests(TestCase):
                 "trade_name": "Almacen Ana",
                 "email": "ana@test.local",
                 "phone": "1111-2222",
-                "address": "Calle 123",
-                "city": "CABA",
-                "province": "Buenos Aires",
                 "password": "Demo1234!",
             },
             format="json",
@@ -38,7 +35,7 @@ class PublicRegisterTests(TestCase):
         self.assertEqual(user.role, "COMMERCE")
         self.assertEqual(commerce.trade_name, "Almacen Ana")
         self.assertEqual(commerce.contact_name, "Ana Perez")
-        self.assertEqual(commerce.address, "Calle 123")
+        self.assertEqual(commerce.address, "")
 
     def test_public_register_rejects_non_customer_roles(self):
         response = self.client.post(
@@ -48,7 +45,6 @@ class PublicRegisterTests(TestCase):
                 "trade_name": "Distribuidora Publica",
                 "email": "dist-publica@test.local",
                 "phone": "1111-2222",
-                "address": "Ruta 8",
                 "password": "Demo1234!",
                 "role": "DISTRIBUTOR",
             },

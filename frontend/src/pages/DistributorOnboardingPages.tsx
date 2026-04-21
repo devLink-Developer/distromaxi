@@ -7,6 +7,8 @@ import { useAuthStore } from '../stores/authStore'
 import type { DistributorOnboardingState } from '../types/domain'
 import { defaultRouteForUser } from '../utils/authRouting'
 
+const publicHeroImage = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=80'
+
 const distributorSteps = [
   { title: 'Cuenta', text: 'Creamos tu cuenta con los datos principales.' },
   { title: 'Plan', text: 'Elegi el plan que mejor se adapte a tu distribuidora.' },
@@ -340,62 +342,68 @@ function DistributorShell({
   children: ReactNode
 }) {
   return (
-    <main className="grid min-h-dvh bg-[#f7f1e8] lg:grid-cols-[1.08fr_0.92fr]">
-      <section className="relative hidden overflow-hidden bg-slate-950 p-10 text-white lg:block">
-        <img
-          className="absolute inset-0 h-full w-full object-cover opacity-40"
-          src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1400&q=80"
-          alt="Centro logistico con pedidos listos para despacho"
-        />
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-950/75 to-brand-700/70" />
-        <div className="relative z-10 flex h-full max-w-xl flex-col justify-between">
-          <div className="flex items-center justify-between gap-4">
-            <Link className="text-2xl font-800 tracking-[0.08em] text-white" to="/">
-              DISTROMAXI
+    <main className="relative isolate min-h-dvh overflow-hidden bg-slate-950">
+      <img className="absolute inset-0 h-full w-full object-cover" src={publicHeroImage} alt="Centro de distribucion con pedidos listos para despacho" />
+      <div className="absolute inset-0 bg-emerald-950/70" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.18),_transparent_34%),linear-gradient(180deg,rgba(2,44,34,0.16)_0%,rgba(2,44,34,0.4)_100%)]" />
+
+      <div className="relative z-10 mx-auto flex min-h-dvh max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <nav className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
+          <Link className="text-xl font-800 text-white sm:text-lg" to="/">
+            DistroMaxi
+          </Link>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+              to="/"
+            >
+              Ir al inicio
             </Link>
-            <Link className="text-sm font-800 text-brand-100 transition hover:text-white" to="/planes">
-              Ver planes
+            <Link
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+              to="/login"
+            >
+              Ingresar
             </Link>
           </div>
+        </nav>
 
-          <div>
-            <p className="text-sm font-800 uppercase tracking-[0.2em] text-brand-100">{badge}</p>
-            <h1 className="mt-4 text-5xl font-800 leading-tight">{title}</h1>
-            <p className="mt-5 text-lg leading-8 text-slate-200">{text}</p>
-          </div>
-
-          <div className="grid gap-4">
-            <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">{asideTitle}</p>
-              <p className="mt-3 text-lg font-800">{asideText}</p>
+        <section className="mt-6 grid flex-1 gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-10">
+          <div className="hidden max-w-2xl lg:grid lg:gap-5">
+            <div>
+              <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">{badge}</p>
+              <h1 className="mt-5 text-5xl font-800 leading-tight text-white">{title}</h1>
+              <p className="mt-5 max-w-xl text-lg leading-8 text-emerald-50">{text}</p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Pago</p>
-              <p className="mt-3 text-lg font-800">El pago se hace en Mercado Pago y esta pantalla te avisa cuando la cuenta queda lista.</p>
+
+            <div className="grid gap-4">
+              <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
+                <p className="text-xs font-800 uppercase tracking-[0.18em] text-emerald-100">{asideTitle}</p>
+                <p className="mt-3 text-lg font-800">{asideText}</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
+                <p className="text-xs font-800 uppercase tracking-[0.18em] text-emerald-100">Pago</p>
+                <p className="mt-3 text-lg font-800">El pago se hace en Mercado Pago y esta pantalla te avisa cuando la cuenta queda lista.</p>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="grid place-items-center px-4 py-8 sm:px-6 lg:px-10">
-        <div className="w-full max-w-xl rounded-[2rem] border border-white/70 bg-white/92 p-6 shadow-[0_28px_80px_rgba(15,23,42,0.12)] backdrop-blur-sm sm:p-8">
-          <div className="flex items-center justify-between gap-4 lg:hidden">
-            <Link className="text-lg font-800 tracking-[0.08em] text-slate-950" to="/">
-              DISTROMAXI
-            </Link>
-            <Link className="text-sm font-800 text-brand-700" to="/planes">
-              Ver planes
-            </Link>
+          <div className="grid gap-4 lg:justify-self-end">
+            <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-4 text-white backdrop-blur-sm lg:hidden">
+              <p className="text-xs font-800 uppercase tracking-[0.18em] text-emerald-100">{asideTitle}</p>
+              <p className="mt-2 text-base font-800">{asideText}</p>
+            </div>
+
+            <div className="w-full max-w-xl rounded-[2rem] border border-white/80 bg-white p-6 shadow-[0_28px_80px_rgba(15,23,42,0.16)] sm:p-8">
+              <p className="w-fit rounded-full bg-brand-50 px-3 py-1 text-xs font-800 uppercase tracking-[0.16em] text-brand-700">{badge}</p>
+              <h1 className="mt-4 text-3xl font-800 text-slate-950">{title}</h1>
+              <p className="mt-3 text-sm leading-7 text-slate-600">{text}</p>
+              <div className="mt-8">{children}</div>
+              {footer && <div className="mt-8">{footer}</div>}
+            </div>
           </div>
-          <div className="mt-6 lg:mt-0">
-            <p className="w-fit rounded-full bg-brand-50 px-3 py-1 text-xs font-800 uppercase tracking-[0.16em] text-brand-700">{badge}</p>
-            <h1 className="mt-4 text-3xl font-800 text-slate-950">{title}</h1>
-            <p className="mt-3 text-sm leading-7 text-slate-600">{text}</p>
-          </div>
-          <div className="mt-8">{children}</div>
-          {footer && <div className="mt-8">{footer}</div>}
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   )
 }
