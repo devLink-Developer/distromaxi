@@ -1,4 +1,5 @@
 from rest_framework import permissions, viewsets
+from rest_framework.exceptions import ValidationError
 
 from .models import Distributor
 from .serializers import DistributorSerializer
@@ -17,12 +18,14 @@ class DistributorViewSet(viewsets.ModelViewSet):
         return queryset.filter(active=True)
 
     def get_permissions(self):
-        if self.action in {"create", "update", "partial_update", "destroy"}:
-            return [permissions.IsAuthenticated()]
+        if self.action in {"create"}:
+            return [permissions.IsAdminUser()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
-        owner = serializer.validated_data.get("owner") or self.request.user
+        owner = serializer.validated_data.get("owner")
+        if owner is None:
+            raise ValidationError({"owner": "Debes seleccionar el usuario distribuidor que sera duenio de la cuenta."})
         serializer.save(owner=owner)
 
 # Create your views here.

@@ -18,7 +18,7 @@ export function PlansPage() {
         setPlans(data)
         setError('')
       })
-      .catch(() => setError('No pudimos cargar los planes. Probá de nuevo en unos minutos.'))
+      .catch(() => setError('No pudimos cargar los planes. Prueba otra vez en unos minutos.'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -31,7 +31,7 @@ export function PlansPage() {
         <img
           className="absolute inset-0 h-full w-full object-cover"
           src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=80"
-          alt="Centro de distribución con pedidos listos para despacho"
+          alt="Centro de distribucion con pedidos listos para despacho"
         />
         <div className="absolute inset-0 bg-emerald-950/70" />
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
@@ -39,26 +39,29 @@ export function PlansPage() {
             DistroMaxi
           </Link>
           <div className="flex items-center gap-2">
+            <Link className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/">
+              Soy cliente
+            </Link>
             <Link className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/login">
               Ingresar
             </Link>
             <Link className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-800 text-emerald-950 transition hover:bg-emerald-50" to="/register">
-              Crear cuenta
+              Alta clientes
             </Link>
           </div>
         </nav>
         <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-10 sm:px-6 lg:px-8 lg:pt-16">
-          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Activá hoy y empezá a vender en minutos</p>
+          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Pantalla comercial para distribuidoras</p>
           <div className="max-w-4xl">
-            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Vendé más. Automatizá tu distribución. Crecé sin límites.</h1>
+            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Vende mas. Automatiza tu distribucion. Crece sin limites.</h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">
-              La plataforma que conecta tus productos con cientos de comercios en minutos para que llegues a más clientes.
+              La plataforma que conecta tus productos con cientos de comercios en minutos para que llegues a mas clientes.
             </p>
           </div>
           <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
             <HeroStat value={`${customersCount}+`} label="comercios activos" />
             <HeroStat value="24/7" label="pedidos abiertos" />
-            <HeroStat value="3 min" label="para empezar" />
+            <HeroStat value="3 min" label="para arrancar la operacion" />
           </div>
         </div>
       </section>
@@ -66,8 +69,11 @@ export function PlansPage() {
       <section id="planes" className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:px-8">
         <div className="max-w-3xl">
           <p className="text-sm font-800 uppercase text-brand-700">Planes</p>
-          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elegí cómo querés crecer</h2>
-          <p className="mt-3 text-base leading-7 text-slate-600">Pagás tu suscripción y empezás a recibir pedidos con un catálogo listo para vender.</p>
+          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elige como quieres crecer</h2>
+          <p className="mt-3 text-base leading-7 text-slate-600">
+            Consulta los planes disponibles y deja encaminada tu activacion. Las cuentas de distribuidora las crea el
+            equipo admin.
+          </p>
         </div>
 
         {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-800 text-red-700">{error}</p>}
@@ -90,16 +96,16 @@ export function PlansPage() {
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <div>
             <p className="text-sm font-800 uppercase text-mint-700">Beneficios</p>
-            <h2 className="mt-2 text-3xl font-800 text-slate-950">Más pedidos, menos desorden</h2>
+            <h2 className="mt-2 text-3xl font-800 text-slate-950">Mas pedidos, menos desorden</h2>
             <p className="mt-3 text-base leading-7 text-slate-600">Tu equipo vende, prepara y reparte con una misma vista de trabajo.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {[
-              'Mostrá tu catálogo siempre actualizado',
-              'Llegá a más clientes con tu tienda abierta 24/7',
-              'Tomá pedidos sin llamadas perdidas',
-              'Controlá stock antes de confirmar',
-              'Organizá entregas por chofer y vehículo',
+              'Muestra tu catalogo siempre actualizado',
+              'Llega a mas clientes con tu tienda abierta 24/7',
+              'Toma pedidos sin llamadas perdidas',
+              'Controla stock antes de confirmar',
+              'Organiza entregas por chofer y vehiculo',
             ].map((benefit) => (
               <BenefitItem key={benefit} text={benefit} />
             ))}
@@ -110,7 +116,7 @@ export function PlansPage() {
       <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div>
           <p className="text-sm font-800 uppercase text-brand-700">Comparativa</p>
-          <h2 className="mt-2 text-3xl font-800 text-slate-950">Lo esencial para decidir rápido</h2>
+          <h2 className="mt-2 text-3xl font-800 text-slate-950">Lo esencial para decidir rapido</h2>
         </div>
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
           <div className="overflow-x-auto">
@@ -119,13 +125,13 @@ export function PlansPage() {
                 <tr>
                   <th className="px-4 py-3">Plan</th>
                   <th className="px-4 py-3">Pedidos</th>
-                  <th className="px-4 py-3">Estadísticas</th>
+                  <th className="px-4 py-3">Estadisticas</th>
                   <th className="px-4 py-3">Rutas</th>
                   <th className="px-4 py-3">Venta sugerida</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                <CompareRow plan="START" pedidos="Básico" stats="Inicial" rutas="Manual" venta="No incluida" />
+                <CompareRow plan="START" pedidos="Basico" stats="Inicial" rutas="Manual" venta="No incluida" />
                 <CompareRow plan="PRO" pedidos="Avanzado" stats="Completa" rutas="Control diario" venta="No incluida" />
                 <CompareRow plan="IA" pedidos="Avanzado" stats="Completa" rutas="Optimizada" venta="Incluida" />
               </tbody>
@@ -137,12 +143,12 @@ export function PlansPage() {
       <section className="bg-mint-50">
         <div className="mx-auto grid max-w-7xl gap-6 px-4 py-12 sm:px-6 lg:grid-cols-3 lg:px-8">
           {[
-            ['Mayorista Norte', 'Antes perdíamos pedidos por WhatsApp. Ahora cada comercio compra cuando quiere.'],
-            ['Distribuidora Ruta 8', 'El equipo prepara más rápido y los choferes salen con entregas ordenadas.'],
+            ['Mayorista Norte', 'Antes perdiamos pedidos por WhatsApp. Ahora cada comercio compra cuando quiere.'],
+            ['Distribuidora Ruta 8', 'El equipo prepara mas rapido y los choferes salen con entregas ordenadas.'],
             ['Almacenes Unidos', 'Encontramos productos y precios sin pedir listas nuevas cada semana.'],
           ].map(([name, quote]) => (
             <blockquote key={name} className="rounded-lg border border-emerald-100 bg-white p-5 shadow-soft">
-              <p className="text-base leading-7 text-slate-700">“{quote}”</p>
+              <p className="text-base leading-7 text-slate-700">"{quote}"</p>
               <footer className="mt-4 font-800 text-slate-950">{name}</footer>
             </blockquote>
           ))}
@@ -151,16 +157,19 @@ export function PlansPage() {
 
       <section className="mx-auto grid max-w-4xl gap-4 px-4 py-12 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-800 text-slate-950">Preguntas frecuentes</h2>
-        <FaqItem question="¿Puedo cambiar de plan?" answer="Sí. Podés ajustar el plan cuando tu operación necesite más capacidad." />
-        <FaqItem question="¿El pago se hace en Mercado Pago?" answer="Sí. Cada plan te lleva al link de suscripción correspondiente." />
-        <FaqItem question="¿Necesito cargar todo el catálogo el primer día?" answer="No. Podés empezar con tus productos principales y ampliar después." />
+        <FaqItem question="Puedo cambiar de plan?" answer="Si. Puedes ajustar el plan cuando tu operacion necesite mas capacidad." />
+        <FaqItem question="El pago se hace en Mercado Pago?" answer="Si. Cada plan te lleva al link de suscripcion correspondiente." />
+        <FaqItem
+          question="La cuenta distribuidora se crea sola?"
+          answer="No. El alta de la cuenta distribuidora la gestiona el equipo admin una vez definido el plan."
+        />
       </section>
 
       <section className="bg-brand-700">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <h2 className="text-3xl font-800">Activá hoy y empezá a vender en minutos</h2>
-            <p className="mt-2 text-brand-50">Tus comercios compran mejor cuando tu catálogo está siempre disponible.</p>
+            <h2 className="text-3xl font-800">Activa el plan y deja lista tu operacion comercial</h2>
+            <p className="mt-2 text-brand-50">La cuenta distribuidora queda administrada desde nuestro panel interno.</p>
           </div>
           <a className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-5 font-800 text-brand-700 transition hover:bg-brand-50" href="#planes">
             Ver planes
@@ -182,7 +191,7 @@ function PlanCard({ plan }: { plan: Plan }) {
     <article
       className={`relative rounded-lg border bg-white p-5 shadow-soft ${featured ? 'border-mint-500 ring-2 ring-mint-500' : 'border-slate-200'}`}
     >
-      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">Más elegido</p>}
+      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">Mas elegido</p>}
       <h3 className="text-2xl font-800 text-slate-950">{plan.name}</h3>
       <p className="mt-2 min-h-12 text-sm leading-6 text-slate-600">{plan.description}</p>
       <p className="mt-5 text-3xl font-800 text-slate-950">
@@ -199,8 +208,9 @@ function PlanCard({ plan }: { plan: Plan }) {
           window.location.href = plan.mp_subscription_url
         }}
       >
-        Empezar ahora
+        Continuar con este plan
       </button>
+      <p className="mt-3 text-xs leading-5 text-slate-500">La activacion de la cuenta distribuidora queda gestionada desde admin.</p>
       <ul className="mt-5 grid gap-3 text-sm text-slate-700">
         {benefits.map((benefit) => (
           <li key={benefit} className="flex gap-2">

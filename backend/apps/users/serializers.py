@@ -1,6 +1,11 @@
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from apps.commerces.models import Commerce
+
+from .models import UserRole
 
 User = get_user_model()
 
@@ -12,6 +17,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "password", "full_name", "phone", "role", "is_active", "created_at"]
         read_only_fields = ["id", "created_at"]
+
+    def validate_role(self, value):
+        if value == UserRole.DRIVER and (self.instance is None or self.instance.role != UserRole.DRIVER):
+            raise serializers.ValidationError("Los choferes deben crearse desde la distribuidora.")
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop("password", "Cambiar1234")
@@ -29,15 +39,41 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    role = serializers.ChoiceField(
+        choices=((UserRole.COMMERCE, "Cliente"),),
+        required=False,
+        default=UserRole.COMMERCE,
+    )
+    trade_name = serializers.CharField(write_only=True)
+    address = serializers.CharField(write_only=True)
+    city = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    province = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ["id", "email", "password", "full_name", "phone", "role"]
+        fields = ["id", "email", "password", "full_name", "phone", "role", "trade_name", "address", "city", "province"]
         read_only_fields = ["id"]
 
+    @transaction.atomic
     def create(self, validated_data):
         password = validated_data.pop("password")
-        return User.objects.create_user(password=password, **validated_data)
+        validated_data.pop("role", None)
+        trade_name = validated_data.pop("trade_name")
+        address = validated_data.pop("address")
+        city = validated_data.pop("city", "")
+        province = validated_data.pop("province", "")
+        user = User.objects.create_user(password=password, role=UserRole.COMMERCE, **validated_data)
+        Commerce.objects.create(
+            user=user,
+            trade_name=trade_name,
+            contact_name=user.full_name,
+            email=user.email,
+            phone=user.phone,
+            address=address,
+            city=city,
+            province=province,
+        )
+        return user
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):

@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+from rest_framework.exceptions import PermissionDenied
 
 from apps.distributors.utils import filter_by_distributor, get_user_distributor
 
@@ -29,6 +30,8 @@ class DriverProfileViewSet(viewsets.ModelViewSet):
         return filter_by_distributor(queryset, user)
 
     def perform_create(self, serializer):
+        if self.request.user.role != "DISTRIBUTOR":
+            raise PermissionDenied("Los choferes deben ser creados por la distribuidora.")
         distributor = serializer.validated_data.get("distributor") or get_user_distributor(self.request.user)
         serializer.save(distributor=distributor)
 

@@ -3,13 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CartPage, CheckoutPage, DistributorCatalogPage, HomePage } from '../CommercePages'
-import { AdminSubscriptionsPage } from '../DashboardPages'
-import { LoginPage } from '../AuthPages'
-import { PlansPage } from '../PlansPage'
 import { App } from '../../app/App'
 import { useCartStore } from '../../stores/cartStore'
 import type { Product } from '../../types/domain'
+import { LoginPage, RegisterPage } from '../AuthPages'
+import { CartPage, CheckoutPage, DistributorCatalogPage, HomePage } from '../CommercePages'
+import { AdminSubscriptionsPage } from '../DashboardPages'
+import { PlansPage } from '../PlansPage'
 
 const product: Product = {
   id: 1,
@@ -124,6 +124,55 @@ describe('DistroMaxi frontend flows', () => {
     })
   })
 
+  it('registers only client accounts from the public form', async () => {
+    vi.mocked(fetch).mockReturnValue(
+      jsonResponse({
+        id: 2,
+        email: 'ana@test.local',
+        full_name: 'Ana Perez',
+        phone: '1111-2222',
+        role: 'COMMERCE',
+        is_active: true,
+      }),
+    )
+
+    render(
+      <MemoryRouter>
+        <RegisterPage />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryByLabelText(/^rol$/i)).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText(/nombre completo/i), 'Ana Perez')
+    await userEvent.type(screen.getByLabelText(/nombre del negocio/i), 'Almacen Ana')
+    await userEvent.type(screen.getByLabelText(/^email$/i), 'ana@test.local')
+    await userEvent.type(screen.getByLabelText(/telefono/i), '1111-2222')
+    await userEvent.type(screen.getByLabelText(/direccion de entrega/i), 'Calle 123')
+    await userEvent.type(screen.getByLabelText(/ciudad/i), 'CABA')
+    await userEvent.type(screen.getByLabelText(/provincia/i), 'Buenos Aires')
+    await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
+
+    await userEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
+
+    await waitFor(() => {
+      const registerCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/auth/register'))
+      expect(registerCall).toBeTruthy()
+      expect(JSON.parse(String(registerCall?.[1]?.body))).toMatchObject({
+        full_name: 'Ana Perez',
+        trade_name: 'Almacen Ana',
+        email: 'ana@test.local',
+        phone: '1111-2222',
+        address: 'Calle 123',
+        city: 'CABA',
+        province: 'Buenos Aires',
+      })
+      expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('role')
+    })
+
+    expect(await screen.findByText(/cuenta de cliente creada/i)).toBeInTheDocument()
+  })
+
   it('renders distributors before products', async () => {
     vi.mocked(fetch).mockReturnValue(jsonResponse([distributor]))
 
@@ -134,7 +183,7 @@ describe('DistroMaxi frontend flows', () => {
     )
 
     expect(await screen.findByText('Distribuidora Andina')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /ver artículos/i })).toHaveAttribute('href', '/distributors/1')
+    expect(screen.getByRole('link', { name: /ver art/i })).toHaveAttribute('href', '/distributors/1')
   })
 
   it('renders subscription plans from the API', async () => {
@@ -144,7 +193,7 @@ describe('DistroMaxi frontend flows', () => {
           id: 1,
           name: 'START',
           price: '19900.00',
-          description: 'Ideal para comenzar. Gestión básica de pedidos.',
+          description: 'Ideal para comenzar. Gestion basica de pedidos.',
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/start',
           is_active: true,
@@ -155,7 +204,7 @@ describe('DistroMaxi frontend flows', () => {
           id: 2,
           name: 'PRO',
           price: '49900.00',
-          description: 'Escala tu operación. Estadísticas avanzadas. Mejor control.',
+          description: 'Escala tu operacion. Estadisticas avanzadas. Mejor control.',
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
           is_active: true,
@@ -171,9 +220,9 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Vendé más. Automatizá tu distribución. Crecé sin límites.')).toBeInTheDocument()
+    expect(screen.getByText('Vende mas. Automatiza tu distribucion. Crece sin limites.')).toBeInTheDocument()
     expect(await screen.findByText('START')).toBeInTheDocument()
-    expect(screen.getByText('Más elegido')).toBeInTheDocument()
+    expect(screen.getByText('Mas elegido')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/plans'), expect.any(Object))
   })
 
@@ -184,7 +233,7 @@ describe('DistroMaxi frontend flows', () => {
         id: 1,
         name: 'START',
         price: '19900.00',
-        description: 'Ideal para comenzar. Gestión básica de pedidos.',
+        description: 'Ideal para comenzar. Gestion basica de pedidos.',
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/start',
         is_active: true,
@@ -197,7 +246,7 @@ describe('DistroMaxi frontend flows', () => {
         id: 2,
         name: 'PRO',
         price: '49900.00',
-        description: 'Escala tu operación. Estadísticas avanzadas.',
+        description: 'Escala tu operacion. Estadisticas avanzadas.',
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
         is_active: true,
@@ -224,7 +273,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Planes de suscripción')).toBeInTheDocument()
+    expect(await screen.findByText(/planes de suscrip/i)).toBeInTheDocument()
 
     await userEvent.click(screen.getAllByRole('button', { name: /editar/i })[0])
     const urlInput = screen.getByLabelText(/link mercado pago/i)
@@ -244,30 +293,15 @@ describe('DistroMaxi frontend flows', () => {
     })
   })
 
-  it('shows the marketing landing on the root route', async () => {
-    vi.mocked(fetch).mockReturnValue(
-      jsonResponse([
-        {
-          id: 1,
-          name: 'PRO',
-          price: '49900.00',
-          description: 'Escala tu operación. Estadísticas avanzadas. Mejor control.',
-          currency: 'ARS',
-          mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
-          is_active: true,
-          sort_order: 20,
-          is_featured: true,
-        },
-      ]),
-    )
-
+  it('shows the customer landing on the root route', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('Vendé más. Automatizá tu distribución. Crecé sin límites.')).toBeInTheDocument()
+    expect(screen.getByText('Hace tus pedidos a distribuidoras desde un solo lugar.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /quiero vender con distromaxi/i })).toHaveAttribute('href', '/planes')
   })
 
   it('renders products inside a distributor catalog', async () => {
@@ -312,7 +346,7 @@ describe('DistroMaxi frontend flows', () => {
       jsonResponse({
         id: 10,
         commerce: 1,
-        commerce_name: 'Almacén Luna',
+        commerce_name: 'Almacen Luna',
         distributor: 1,
         distributor_name: 'Distribuidora Andina',
         total: '3250.00',

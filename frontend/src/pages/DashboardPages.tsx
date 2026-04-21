@@ -29,6 +29,7 @@ import type {
   ProductSubCategory,
   ProductSupplier,
   StockItem,
+  User,
 } from '../types/domain'
 
 type ExportModule = 'sales' | 'customers' | 'products' | 'operations'
@@ -623,12 +624,24 @@ export function BillingPage() {
 }
 
 export function AdminDistributorsPage() {
+  const [owners, setOwners] = useState<User[]>([])
+
+  useEffect(() => {
+    void api.list<User>('users').then((users) => setOwners(users.filter((user) => user.role === 'DISTRIBUTOR')))
+  }, [])
+
+  const ownerOptions = owners.map((owner) => ({
+    value: String(owner.id),
+    label: `${owner.full_name} · ${owner.email}`,
+  }))
+
   return (
     <ResourceManager
       title="Admin distribuidoras"
-      description="Administra distribuidoras."
+      description="Crea la cuenta distribuidora desde admin y asigna aqui el usuario DISTRIBUTOR que sera duenio."
       endpoint="distributors"
       fields={[
+        { name: 'owner', label: 'Usuario distribuidor', type: 'select', required: true, options: ownerOptions },
         { name: 'business_name', label: 'Razon social', required: true },
         { name: 'tax_id', label: 'CUIT', required: true },
         { name: 'contact_name', label: 'Contacto', required: true },
@@ -640,6 +653,7 @@ export function AdminDistributorsPage() {
       ]}
       columns={[
         { key: 'business_name', label: 'Distribuidora' },
+        { key: 'owner_email', label: 'Usuario owner' },
         { key: 'tax_id', label: 'CUIT' },
         { key: 'subscription_status', label: 'Suscripcion' },
         { key: 'active', label: 'Activa' },
@@ -652,13 +666,23 @@ export function AdminUsersPage() {
   return (
     <ResourceManager
       title="Usuarios"
-      description="Usuarios registrados por rol."
+      description="Crea admins, distribuidores y clientes. Los choferes se crean desde el panel de cada distribuidora."
       endpoint="users"
       fields={[
         { name: 'email', label: 'Email', type: 'email', required: true },
         { name: 'full_name', label: 'Nombre completo', required: true },
         { name: 'phone', label: 'Telefono' },
-        { name: 'role', label: 'Rol', required: true },
+        {
+          name: 'role',
+          label: 'Rol',
+          type: 'select',
+          required: true,
+          options: [
+            { value: 'ADMIN', label: 'ADMIN' },
+            { value: 'DISTRIBUTOR', label: 'DISTRIBUTOR' },
+            { value: 'COMMERCE', label: 'COMMERCE' },
+          ],
+        },
       ]}
       columns={[
         { key: 'email', label: 'Email' },
@@ -697,7 +721,7 @@ export function AdminSubscriptionsPage() {
             name: 'mp_subscription_url',
             label: 'Link Mercado Pago',
             type: 'url',
-            helperText: 'Este link se abre cuando el cliente elige el plan en /planes.',
+            helperText: 'Este link se abre cuando la distribuidora elige el plan en /planes.',
           },
           { name: 'currency', label: 'Moneda', required: true },
           { name: 'sort_order', label: 'Orden', type: 'number', required: true },

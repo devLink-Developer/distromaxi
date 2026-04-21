@@ -18,6 +18,7 @@ import {
 } from '../pages/DashboardPages'
 import { DriverDeliveriesPage, DriverDeliveryDetailPage, TrackingPage } from '../pages/DriverPages'
 import { LoginPage, RegisterPage } from '../pages/AuthPages'
+import { LandingPage } from '../pages/LandingPage'
 import { PlansPage } from '../pages/PlansPage'
 import {
   CartPage,
@@ -44,7 +45,7 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<PlansPage />} />
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/planes" element={<PlansPage />} />

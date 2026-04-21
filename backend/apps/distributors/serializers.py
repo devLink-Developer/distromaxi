@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.users.models import UserRole
+
 from .models import Distributor
 
 
@@ -34,3 +36,8 @@ class DistributorSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at", "can_operate"]
         extra_kwargs = {"owner": {"required": False}}
+
+    def validate_owner(self, value):
+        if value.role != UserRole.DISTRIBUTOR:
+            raise serializers.ValidationError("Selecciona un usuario con rol DISTRIBUTOR.")
+        return value
