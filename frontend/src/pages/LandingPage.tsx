@@ -41,8 +41,8 @@ export function LandingPage() {
       <section className="relative isolate min-h-[72dvh] overflow-hidden">
         <img
           className="absolute inset-0 h-full w-full object-cover"
-          src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1800&q=80"
-          alt="Gondola de supermercado lista para reposicion"
+          src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=80"
+          alt="Centro de distribucion con pedidos listos para despacho"
         />
         <div className="absolute inset-0 bg-emerald-950/72" />
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
