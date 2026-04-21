@@ -44,7 +44,8 @@ export function LandingPage() {
           src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=80"
           alt="Centro de distribucion con pedidos listos para despacho"
         />
-        <div className="absolute inset-0 bg-emerald-950/72" />
+        <div className="absolute inset-0 bg-emerald-950/70" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,44,34,0.84)_0%,rgba(2,44,34,0.74)_44%,rgba(2,44,34,0.56)_100%),linear-gradient(180deg,rgba(2,44,34,0.18)_0%,rgba(2,44,34,0.46)_100%)]" />
         <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
           <Link className="text-lg font-800 text-white" to="/">
             DistroMaxi
@@ -65,8 +66,10 @@ export function LandingPage() {
         <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-10 sm:px-6 lg:grid-cols-[1fr_0.8fr] lg:px-8 lg:pt-16">
           <div className="max-w-4xl">
             <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Para clientes</p>
-            <h1 className="mt-5 text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Hace tus pedidos desde un solo lugar.</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">
+            <h1 className="mt-5 text-4xl font-800 leading-tight text-white drop-shadow-[0_10px_26px_rgba(0,0,0,0.4)] sm:text-5xl lg:text-6xl">
+              Hace tus pedidos desde un solo lugar.
+            </h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50 drop-shadow-[0_6px_18px_rgba(0,0,0,0.32)]">
               Explora catalogos actualizados, repone stock cuando lo necesitas y sigue cada entrega sin salir de
               DistroMaxi.
             </p>
@@ -84,7 +87,7 @@ export function LandingPage() {
                 Quiero vender con DistroMaxi
               </Link>
             </div>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-emerald-100">
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-emerald-100 drop-shadow-[0_4px_12px_rgba(0,0,0,0.28)]">
               Si queres vender con DistroMaxi, entra por la seccion para distribuidoras y segui el alta paso a paso.
             </p>
           </div>
@@ -97,7 +100,7 @@ export function LandingPage() {
                 Mira proveedores, arma el carrito y segui tu pedido desde una experiencia ordenada.
               </p>
             </div>
-            <div className="rounded-lg border border-white/20 bg-slate-950/25 p-5 text-white">
+            <div className="rounded-lg border border-white/20 bg-white/10 p-5 text-white backdrop-blur-sm">
               <p className="text-sm font-800 uppercase tracking-[0.18em] text-emerald-100">Acceso distribuidoras</p>
               <p className="mt-3 text-lg font-800 leading-8">La seccion para distribuidoras sigue disponible para ver planes y empezar a vender con DistroMaxi.</p>
             </div>
