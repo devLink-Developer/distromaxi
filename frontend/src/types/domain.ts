@@ -1,5 +1,15 @@
 export type Role = 'ADMIN' | 'DISTRIBUTOR' | 'COMMERCE' | 'DRIVER'
 
+export type DistributorAccessState = 'NONE' | 'ONBOARDING' | 'REVIEW_REQUIRED' | 'FAILED' | 'ACTIVE'
+
+export type DistributorAccess = {
+  state: DistributorAccessState
+  onboarding_status: string | null
+  onboarding_id: number | null
+  distributor_id: number | null
+  distributor_name: string | null
+}
+
 export type User = {
   id: number
   email: string
@@ -7,6 +17,7 @@ export type User = {
   phone: string
   role: Role
   is_active: boolean
+  distributor_access: DistributorAccess
 }
 
 export type AuthResponse = {
@@ -25,6 +36,8 @@ export type Distributor = {
   address: string
   city: string
   province: string
+  latitude: string | null
+  longitude: string | null
   currency: string
   plan_name: string
   subscription_status: string
@@ -40,9 +53,43 @@ export type Plan = {
   description: string
   currency: string
   mp_subscription_url: string
+  mp_preapproval_plan_id: string
   is_active: boolean
   sort_order: number
   is_featured: boolean
+  max_products?: number
+  max_drivers?: number
+}
+
+export type DistributorOnboardingState = {
+  access_state: DistributorAccessState
+  status: string | null
+  onboarding_id: number | null
+  distributor_id: number | null
+  business_name: string
+  tax_id: string
+  contact_name: string
+  email: string
+  phone: string
+  selected_plan: Plan | null
+  checkout_url: string
+  review_reason: string
+  failure_reason: string
+  mercado_pago_status: string
+  checkout_started_at: string | null
+  activated_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export type DistributorSignupResponse = {
+  user: User
+  onboarding: DistributorOnboardingState
+}
+
+export type DistributorPlanSelectionResponse = {
+  checkout_url: string
+  onboarding: DistributorOnboardingState
 }
 
 export type Product = {

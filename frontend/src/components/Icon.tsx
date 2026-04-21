@@ -10,6 +10,7 @@ type IconName =
   | 'wallet'
   | 'upload'
   | 'search'
+  | 'pin'
   | 'logout'
 
 const paths: Record<IconName, string> = {
@@ -24,6 +25,7 @@ const paths: Record<IconName, string> = {
   wallet: 'M4 6h15a1 1 0 0 1 1 1v3h-5a3 3 0 0 0 0 6h5v3a1 1 0 0 1-1 1H4V6Zm11 6h6v2h-6a1 1 0 0 1 0-2Z',
   upload: 'M12 16V4m0 0 4 4m-4-4-4 4M4 16v4h16v-4',
   search: 'M10.5 18a7.5 7.5 0 1 1 5.3-12.8 7.5 7.5 0 0 1-5.3 12.8Zm5.5-2 5 5',
+  pin: 'M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   logout: 'M14 8V5a1 1 0 0 0-1-1H5v16h8a1 1 0 0 0 1-1v-3m-2-4h9m0 0-3-3m3 3-3 3',
 }
 

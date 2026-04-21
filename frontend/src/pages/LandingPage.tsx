@@ -31,7 +31,7 @@ const workflowSteps = [
 
 const operatingRules = [
   'El alta online queda reservada para clientes que quieren comprar.',
-  'Las cuentas de distribuidora las crea el equipo admin desde el panel interno.',
+  'Las distribuidoras ahora abren una cuenta basica y luego eligen plan antes de activarse.',
   'Los choferes los da de alta cada distribuidora desde su propio dashboard.',
 ]
 
@@ -87,8 +87,8 @@ export function LandingPage() {
               </Link>
             </div>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-emerald-100">
-              El alta online es solo para clientes. Si eres distribuidora, accede a la pantalla comercial pensada para
-              vender con nosotros.
+              Si eres distribuidora, entra primero a la pantalla comercial y desde ahi pasas al alta basica antes del
+              checkout.
             </p>
           </div>
 
@@ -154,8 +154,8 @@ export function LandingPage() {
             <p className="text-sm font-800 uppercase text-mint-700">Reglas de acceso</p>
             <h2 className="mt-2 text-3xl font-800 text-slate-950">Cada tipo de cuenta entra por su propio circuito.</h2>
             <p className="mt-3 text-base leading-7 text-slate-600">
-              El flujo publico se reserva para clientes. Distribuidoras y choferes siguen una provision interna
-              controlada.
+              Clientes, distribuidoras y choferes siguen circuitos distintos para no mezclar compra, suscripcion y
+              operacion.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
@@ -185,16 +185,16 @@ export function LandingPage() {
 
       <section className="mx-auto grid max-w-4xl gap-4 px-4 py-12 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-800 text-slate-950">Preguntas frecuentes</h2>
-        <FaqItem question="La cuenta online es para clientes o distribuidoras?" answer="El alta publica es solo para clientes. Las distribuidoras se crean desde admin." />
+        <FaqItem question="La cuenta online es para clientes o distribuidoras?" answer="Clientes se registran aca. Las distribuidoras entran por /planes, crean su cuenta basica y activan despues con la suscripcion." />
         <FaqItem question="Los choferes tambien se registran desde esta landing?" answer="No. Cada distribuidora crea sus choferes desde su propio panel." />
-        <FaqItem question="Si quiero vender con DistroMaxi, a donde entro?" answer="Usa el acceso a /planes, que mantiene la propuesta comercial orientada a distribuidoras." />
+        <FaqItem question="Si quiero vender con DistroMaxi, a donde entro?" answer="Usa el acceso a /planes. Desde esa pantalla revisas planes, creas la cuenta distribuidora y sigues al checkout." />
       </section>
 
       <section className="bg-brand-700">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
             <h2 className="text-3xl font-800">Crea tu cuenta y empieza a comprar con un flujo pensado para clientes.</h2>
-            <p className="mt-2 text-brand-50">La experiencia de distribuidoras sigue disponible aparte para mantener coherencia operativa.</p>
+            <p className="mt-2 text-brand-50">La experiencia para distribuidoras sigue separada para no mezclar onboarding comercial con compra.</p>
           </div>
           <Link className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-5 font-800 text-brand-700 transition hover:bg-brand-50" to="/register">
             Crear cuenta ahora

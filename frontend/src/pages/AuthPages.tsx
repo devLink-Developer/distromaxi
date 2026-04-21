@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { ApiError } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import { defaultRouteForUser } from '../utils/authRouting'
 
 export function LoginPage() {
   const login = useAuthStore((state) => state.login)
@@ -18,15 +19,7 @@ export function LoginPage() {
     const form = new FormData(event.currentTarget)
     try {
       const user = await login(String(form.get('email')), String(form.get('password')))
-      navigate(
-        user.role === 'ADMIN'
-          ? '/admin/distributors'
-          : user.role === 'COMMERCE'
-            ? '/home'
-            : user.role === 'DRIVER'
-              ? '/driver/deliveries'
-              : '/dashboard',
-      )
+      navigate(defaultRouteForUser(user))
     } catch (caught) {
       setError(errorMessage(caught, 'Email o contrasena invalidos.'))
     } finally {
@@ -79,8 +72,8 @@ export function LoginPage() {
           </p>
           <p>
             Eres distribuidora?{' '}
-            <Link className="font-800 text-brand-700" to="/planes">
-              Ver propuesta comercial
+            <Link className="font-800 text-brand-700" to="/distributor/register">
+              Crear cuenta y elegir plan
             </Link>
           </p>
         </div>
@@ -179,11 +172,14 @@ export function RegisterPage() {
         </button>
         <div className="grid gap-2 text-sm text-slate-600">
           <p>
-            Las cuentas de distribuidora las crea admin. Los choferes los registra cada distribuidora desde su panel.
+            Las distribuidoras tienen un onboarding aparte con cuenta basica, plan y activacion por suscripcion.
           </p>
-          <Link className="font-800 text-brand-700" to="/login">
-            Ya tengo cuenta
-          </Link>
+          <p>
+            Eres distribuidora?{' '}
+            <Link className="font-800 text-brand-700" to="/planes">
+              Revisar planes
+            </Link>
+          </p>
         </div>
       </form>
     </AuthShell>
@@ -222,11 +218,11 @@ function AuthShell({ title, text, children }: { title: string; text: string; chi
           <div className="grid gap-4">
             <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
               <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Alta publica</p>
-              <p className="mt-3 text-lg font-800">Solo para clientes que quieren comprar a distribuidoras.</p>
+              <p className="mt-3 text-lg font-800">Clientes y distribuidoras se registran por flujos distintos, cada uno con su propio objetivo.</p>
             </div>
             <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Alta interna</p>
-              <p className="mt-3 text-lg font-800">Distribuidoras desde admin. Choferes desde cada dashboard distribuidor.</p>
+              <p className="text-xs font-800 uppercase tracking-[0.18em] text-brand-100">Provision operativa</p>
+              <p className="mt-3 text-lg font-800">Los choferes siguen naciendo desde cada dashboard distribuidor, no desde la landing publica.</p>
             </div>
           </div>
         </div>

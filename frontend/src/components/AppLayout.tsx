@@ -11,11 +11,12 @@ const commerceLinks = [
 
 const distributorLinks = [
   { to: '/dashboard', label: 'Panel', icon: 'home' as const },
-  { to: '/dashboard/products', label: 'Artículos', icon: 'box' as const },
+  { to: '/dashboard/profile', label: 'Perfil', icon: 'pin' as const },
+  { to: '/dashboard/products', label: 'Articulos', icon: 'box' as const },
   { to: '/dashboard/stock', label: 'Stock', icon: 'orders' as const },
   { to: '/dashboard/customers', label: 'Clientes', icon: 'users' as const },
   { to: '/dashboard/drivers', label: 'Choferes', icon: 'route' as const },
-  { to: '/dashboard/vehicles', label: 'Vehículos', icon: 'truck' as const },
+  { to: '/dashboard/vehicles', label: 'Vehiculos', icon: 'truck' as const },
   { to: '/dashboard/imports', label: 'Importar', icon: 'upload' as const },
   { to: '/dashboard/billing', label: 'Cobro', icon: 'wallet' as const },
 ]
@@ -48,7 +49,7 @@ export function AppLayout() {
     <div className="min-h-dvh bg-slate-50">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200 bg-white px-5 py-6 lg:block">
         <Brand />
-        <nav className="mt-8 grid gap-2" aria-label="Navegación principal">
+        <nav className="mt-8 grid gap-2" aria-label="Navegacion principal">
           {links.map((link) => (
             <NavItem key={link.to} {...link} />
           ))}
@@ -62,7 +63,7 @@ export function AppLayout() {
               <Brand compact />
             </div>
             <div className="hidden lg:block">
-              <p className="text-sm font-semibold text-slate-500">Sesión activa</p>
+              <p className="text-sm font-semibold text-slate-500">Sesion activa</p>
               <p className="text-base font-700 text-slate-950">{user?.full_name}</p>
             </div>
             <button
@@ -85,7 +86,7 @@ export function AppLayout() {
 
       <nav
         className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white px-2 py-2 shadow-soft lg:hidden"
-        aria-label="Navegación inferior"
+        aria-label="Navegacion inferior"
       >
         {links.slice(0, 4).map((link) => (
           <NavItem key={link.to} mobile {...link} />

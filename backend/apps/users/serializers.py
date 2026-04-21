@@ -4,6 +4,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.commerces.models import Commerce
+from apps.distributors.services import distributor_access_for_user
 
 from .models import UserRole
 
@@ -12,11 +13,15 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=8)
+    distributor_access = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "password", "full_name", "phone", "role", "is_active", "created_at"]
+        fields = ["id", "email", "password", "full_name", "phone", "role", "is_active", "created_at", "distributor_access"]
         read_only_fields = ["id", "created_at"]
+
+    def get_distributor_access(self, obj):
+        return distributor_access_for_user(obj).as_dict()
 
     def validate_role(self, value):
         if value == UserRole.DRIVER and (self.instance is None or self.instance.role != UserRole.DRIVER):

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ChangeEvent, ReactNode } from 'react'
+import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import {
   Bar,
   BarChart,
@@ -23,6 +23,7 @@ import { api } from '../services/api'
 import type {
   DashboardFilters,
   DashboardPoint,
+  Distributor,
   ImportJob,
   Order,
   ProductCategory,
@@ -623,6 +624,127 @@ export function BillingPage() {
   )
 }
 
+export function DistributorProfilePage() {
+  const [profile, setProfile] = useState<Distributor | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    void api
+      .distributors()
+      .then((rows) => {
+        setProfile(rows[0] ?? null)
+        setError('')
+      })
+      .catch(() => setError('No pudimos cargar los datos de la distribuidora.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!profile) return
+    setSaving(true)
+    setMessage('')
+    setError('')
+    const form = new FormData(event.currentTarget)
+    try {
+      const updated = await api.update<Distributor>('distributors', profile.id, {
+        contact_name: form.get('contact_name'),
+        email: form.get('email'),
+        phone: form.get('phone'),
+        address: form.get('address'),
+        city: form.get('city'),
+        province: form.get('province'),
+        latitude: String(form.get('latitude') || '').trim() || null,
+        longitude: String(form.get('longitude') || '').trim() || null,
+      })
+      setProfile(updated)
+      setMessage('Datos actualizados.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No se pudo guardar el perfil.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando perfil...</div>
+  }
+
+  if (!profile) {
+    return <EmptyState title="Sin distribuidora activa" text="Esta cuenta todavia no tiene una distribuidora operativa asociada." />
+  }
+
+  return (
+    <section className="grid gap-5">
+      <div>
+        <p className="text-sm font-800 uppercase text-brand-700">Direccion principal</p>
+        <h1 className="mt-2 text-2xl font-800 text-slate-950">Perfil de la distribuidora</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+          Completa la direccion base y la geolocalizacion principal que usa la operacion.
+        </p>
+      </div>
+
+      <form className="grid gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-soft" onSubmit={(event) => void submit(event)}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Razon social
+            <input className="min-h-11 rounded-md border border-slate-300 px-3 text-slate-500" defaultValue={profile.business_name} disabled />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            CUIT
+            <input className="min-h-11 rounded-md border border-slate-300 px-3 text-slate-500" defaultValue={profile.tax_id} disabled />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Contacto principal
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="contact_name" defaultValue={profile.contact_name} required />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Telefono
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="phone" type="tel" defaultValue={profile.phone} required />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700 md:col-span-2">
+            Email operativo
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="email" type="email" defaultValue={profile.email} required />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700 md:col-span-2">
+            Direccion principal
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="address" defaultValue={profile.address} required />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Ciudad
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="city" defaultValue={profile.city} />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Provincia
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="province" defaultValue={profile.province} />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Latitud
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="latitude" type="number" step="any" defaultValue={profile.latitude ?? ''} />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Longitud
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="longitude" type="number" step="any" defaultValue={profile.longitude ?? ''} />
+          </label>
+        </div>
+        <p className="rounded-[1.25rem] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+          Usa una sola direccion principal en esta version. Puedes dejar la geolocalizacion cargada con coordenadas decimales.
+        </p>
+        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
+        {message && <p className="rounded-md bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">{message}</p>}
+        <div className="flex justify-end">
+          <button className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={saving} type="submit">
+            {saving ? 'Guardando...' : 'Guardar direccion'}
+          </button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
 export function AdminDistributorsPage() {
   const [owners, setOwners] = useState<User[]>([])
 
@@ -647,7 +769,7 @@ export function AdminDistributorsPage() {
         { name: 'contact_name', label: 'Contacto', required: true },
         { name: 'email', label: 'Email', type: 'email', required: true },
         { name: 'phone', label: 'Telefono', required: true },
-        { name: 'address', label: 'Direccion', required: true },
+        { name: 'address', label: 'Direccion principal' },
         { name: 'plan_name', label: 'Plan' },
         { name: 'mercado_pago_link', label: 'Link Mercado Pago' },
       ]}
@@ -723,6 +845,11 @@ export function AdminSubscriptionsPage() {
             type: 'url',
             helperText: 'Este link se abre cuando la distribuidora elige el plan en /planes.',
           },
+          {
+            name: 'mp_preapproval_plan_id',
+            label: 'Preapproval plan ID',
+            helperText: 'Identificador canonico del plan en Mercado Pago para conciliar el webhook.',
+          },
           { name: 'currency', label: 'Moneda', required: true },
           { name: 'sort_order', label: 'Orden', type: 'number', required: true },
           { name: 'max_products', label: 'Máximo de artículos', type: 'number', required: true },
@@ -734,6 +861,7 @@ export function AdminSubscriptionsPage() {
           { key: 'name', label: 'Plan' },
           { key: 'price', label: 'Precio', format: (value) => money(value) },
           { key: 'mp_subscription_url', label: 'Link Mercado Pago' },
+          { key: 'mp_preapproval_plan_id', label: 'Plan ID MP' },
           { key: 'is_active', label: 'Visible', format: yesNo },
           { key: 'is_featured', label: 'Destacado', format: yesNo },
           { key: 'sort_order', label: 'Orden' },

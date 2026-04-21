@@ -24,7 +24,13 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from apps.billing.views import PlanViewSet, SubscriptionViewSet
 from apps.commerces.views import CommerceViewSet
 from apps.deliveries.views import DeliveryViewSet
-from apps.distributors.views import DistributorViewSet
+from apps.distributors.views import (
+    DistributorOnboardingPlanSelectionView,
+    DistributorOnboardingStateView,
+    DistributorSignupView,
+    DistributorViewSet,
+    MercadoPagoSubscriptionWebhookView,
+)
 from apps.fleet.views import DriverProfileViewSet, VehicleViewSet
 from apps.imports.views import ImportJobViewSet
 from apps.inventory.views import StockItemViewSet, StockMovementViewSet, WarehouseViewSet
@@ -58,9 +64,13 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/plans', PlanViewSet.as_view({'get': 'list'}), name='plans-list'),
     path('api/auth/register', RegisterView.as_view(), name='auth-register'),
+    path('api/auth/register-distributor', DistributorSignupView.as_view(), name='auth-register-distributor'),
     path('api/auth/login', CustomTokenObtainPairView.as_view(), name='auth-login'),
     path('api/auth/refresh', TokenRefreshView.as_view(), name='auth-refresh'),
     path('api/auth/me', MeView.as_view(), name='auth-me'),
+    path('api/distributor-onboarding', DistributorOnboardingStateView.as_view(), name='distributor-onboarding'),
+    path('api/distributor-onboarding/select-plan', DistributorOnboardingPlanSelectionView.as_view(), name='distributor-onboarding-select-plan'),
+    path('api/billing/mercadopago/webhook', MercadoPagoSubscriptionWebhookView.as_view(), name='billing-mercadopago-webhook'),
     path('api/dashboard/', include('apps.dashboard.urls')),
     path('api/', include(router.urls)),
 ]

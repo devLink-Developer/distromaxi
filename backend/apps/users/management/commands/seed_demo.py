@@ -16,6 +16,7 @@ from apps.products.models import Product, ProductCategory, ProductSubCategory, P
 User = get_user_model()
 
 PRO_PLAN_URL = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=0b5dbf4e218448818eaea55b9aa8e182"
+PRO_PLAN_ID = "0b5dbf4e218448818eaea55b9aa8e182"
 
 
 class Command(BaseCommand):
@@ -53,6 +54,7 @@ class Command(BaseCommand):
                 "description": "Escala tu operación. Estadísticas avanzadas y mejor control.",
                 "currency": "ARS",
                 "mp_subscription_url": PRO_PLAN_URL,
+                "mp_preapproval_plan_id": PRO_PLAN_ID,
                 "is_active": True,
                 "sort_order": 20,
                 "is_featured": True,
@@ -60,9 +62,10 @@ class Command(BaseCommand):
                 "max_drivers": 80,
             },
         )
-        if not created and not plan.mp_subscription_url:
-            plan.mp_subscription_url = PRO_PLAN_URL
-            plan.save(update_fields=["mp_subscription_url"])
+        if not created and (not plan.mp_subscription_url or not plan.mp_preapproval_plan_id):
+            plan.mp_subscription_url = plan.mp_subscription_url or PRO_PLAN_URL
+            plan.mp_preapproval_plan_id = plan.mp_preapproval_plan_id or PRO_PLAN_ID
+            plan.save(update_fields=["mp_subscription_url", "mp_preapproval_plan_id"])
         Subscription.objects.update_or_create(
             distributor=distributor,
             defaults={

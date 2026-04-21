@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { api } from '../services/api'
+import { ApiError, api } from '../services/api'
+import { useAuthStore } from '../stores/authStore'
 import type { Plan } from '../types/domain'
 
 const fallbackPlans: Plan[] = []
@@ -10,6 +11,11 @@ export function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>(fallbackPlans)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [checkoutPlanId, setCheckoutPlanId] = useState<number | null>(null)
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const user = useAuthStore((state) => state.user)
+  const selectedPlanName = searchParams.get('plan')
 
   useEffect(() => {
     void api
@@ -24,6 +30,29 @@ export function PlansPage() {
 
   const activePlans = useMemo(() => plans.filter((plan) => plan.is_active).sort((a, b) => a.sort_order - b.sort_order), [plans])
   const customersCount = 120
+  const distributorIsLogged = user?.role === 'DISTRIBUTOR'
+  const distributorIsActive = user?.role === 'DISTRIBUTOR' && user.distributor_access.state === 'ACTIVE'
+
+  async function selectPlan(plan: Plan) {
+    if (distributorIsActive) {
+      navigate('/dashboard/billing')
+      return
+    }
+    if (!distributorIsLogged) {
+      navigate(`/distributor/register?plan=${encodeURIComponent(plan.name)}`)
+      return
+    }
+    setCheckoutPlanId(plan.id)
+    setError('')
+    try {
+      const response = await api.selectDistributorPlan(plan.id)
+      window.location.assign(response.checkout_url)
+    } catch (caught) {
+      setError(errorMessage(caught, 'No pudimos preparar el checkout. Revisa la configuracion del plan e intenta otra vez.'))
+    } finally {
+      setCheckoutPlanId(null)
+    }
+  }
 
   return (
     <main className="min-h-dvh bg-slate-50 text-slate-950">
@@ -53,26 +82,44 @@ export function PlansPage() {
         <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-10 sm:px-6 lg:px-8 lg:pt-16">
           <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Pantalla comercial para distribuidoras</p>
           <div className="max-w-4xl">
-            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Vende mas. Automatiza tu distribucion. Crece sin limites.</h1>
+            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Vende mas. Automatiza tu distribucion. Crece sin romper la operacion.</h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">
-              La plataforma que conecta tus productos con cientos de comercios en minutos para que llegues a mas clientes.
+              Abre tu cuenta basica, elige un plan y activa la distribuidora usando la suscripcion de servicios actual de Mercado Pago.
             </p>
           </div>
           <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
             <HeroStat value={`${customersCount}+`} label="comercios activos" />
-            <HeroStat value="24/7" label="pedidos abiertos" />
-            <HeroStat value="3 min" label="para arrancar la operacion" />
+            <HeroStat value="3 pasos" label="cuenta, plan y activacion" />
+            <HeroStat value="Webhook" label="confirmacion real antes de entrar al dashboard" />
           </div>
         </div>
       </section>
 
       <section id="planes" className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:px-8">
+        {user?.role === 'DISTRIBUTOR' && (
+          <div className="rounded-[2rem] border border-brand-200 bg-white p-6 shadow-soft">
+            <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Paso 2 de 3</p>
+            <h2 className="mt-3 text-2xl font-800 text-slate-950">
+              {distributorIsActive ? 'Tu cuenta ya esta activa.' : 'Tu cuenta basica ya esta lista. Falta elegir plan.'}
+            </h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+              {distributorIsActive
+                ? 'Puedes revisar tu suscripcion actual y seguir configurando la operacion desde el panel.'
+                : 'Al seleccionar un plan lo registramos primero en backend y despues te enviamos al link actual de suscripcion. La activacion definitiva ocurre cuando llega el webhook de Mercado Pago.'}
+            </p>
+            {!distributorIsActive && (
+              <Link className="mt-5 inline-flex min-h-11 items-center rounded-full border border-slate-300 px-4 text-sm font-800 text-slate-700 transition hover:bg-slate-50" to="/distributor/onboarding">
+                Ver estado del onboarding
+              </Link>
+            )}
+          </div>
+        )}
+
         <div className="max-w-3xl">
           <p className="text-sm font-800 uppercase text-brand-700">Planes</p>
           <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elige como quieres crecer</h2>
           <p className="mt-3 text-base leading-7 text-slate-600">
-            Consulta los planes disponibles y deja encaminada tu activacion. Las cuentas de distribuidora las crea el
-            equipo admin.
+            Puedes revisar la propuesta comercial sin iniciar sesion. Para avanzar al checkout debes crear antes la cuenta distribuidora.
           </p>
         </div>
 
@@ -86,7 +133,15 @@ export function PlansPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
             {activePlans.map((plan) => (
-              <PlanCard key={plan.name} plan={plan} />
+              <PlanCard
+                key={plan.name}
+                plan={plan}
+                highlighted={selectedPlanName === plan.name}
+                loading={checkoutPlanId === plan.id}
+                activeDistributor={distributorIsActive}
+                onSelect={selectPlan}
+                requiresSignup={!distributorIsLogged}
+              />
             ))}
           </div>
         )}
@@ -157,19 +212,16 @@ export function PlansPage() {
 
       <section className="mx-auto grid max-w-4xl gap-4 px-4 py-12 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-800 text-slate-950">Preguntas frecuentes</h2>
-        <FaqItem question="Puedo cambiar de plan?" answer="Si. Puedes ajustar el plan cuando tu operacion necesite mas capacidad." />
-        <FaqItem question="El pago se hace en Mercado Pago?" answer="Si. Cada plan te lleva al link de suscripcion correspondiente." />
-        <FaqItem
-          question="La cuenta distribuidora se crea sola?"
-          answer="No. El alta de la cuenta distribuidora la gestiona el equipo admin una vez definido el plan."
-        />
+        <FaqItem question="Puedo revisar planes sin crear cuenta?" answer="Si. La pantalla sigue siendo publica, pero el checkout solo se habilita despues de crear la cuenta distribuidora." />
+        <FaqItem question="El pago se hace en Mercado Pago?" answer="Si. Cada plan sigue usando el link actual de suscripcion por servicios." />
+        <FaqItem question="La cuenta se activa con el regreso del navegador?" answer="No. La activacion real ocurre cuando DistroMaxi confirma la suscripcion por webhook." />
       </section>
 
       <section className="bg-brand-700">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <h2 className="text-3xl font-800">Activa el plan y deja lista tu operacion comercial</h2>
-            <p className="mt-2 text-brand-50">La cuenta distribuidora queda administrada desde nuestro panel interno.</p>
+            <h2 className="text-3xl font-800">Activa el plan y entra a tu panel solo cuando la suscripcion este confirmada.</h2>
+            <p className="mt-2 text-brand-50">Cuenta basica primero, checkout despues, dashboard solo con confirmacion backend.</p>
           </div>
           <a className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-5 font-800 text-brand-700 transition hover:bg-brand-50" href="#planes">
             Ver planes
@@ -180,18 +232,43 @@ export function PlansPage() {
   )
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({
+  plan,
+  highlighted,
+  loading,
+  activeDistributor,
+  requiresSignup,
+  onSelect,
+}: {
+  plan: Plan
+  highlighted: boolean
+  loading: boolean
+  activeDistributor: boolean
+  requiresSignup: boolean
+  onSelect: (plan: Plan) => Promise<void>
+}) {
   const benefits = plan.description
     .split('.')
     .map((benefit) => benefit.trim())
     .filter(Boolean)
-  const featured = plan.is_featured
+  const featured = plan.is_featured || highlighted
+  const unavailable = !plan.mp_subscription_url || !plan.mp_preapproval_plan_id
+  const isDisabled = loading || (!activeDistributor && unavailable)
+  const buttonText = activeDistributor
+    ? 'Ir a mi suscripcion'
+    : requiresSignup
+      ? 'Crear cuenta para continuar'
+      : loading
+        ? 'Abriendo checkout...'
+        : unavailable
+          ? 'Plan no disponible'
+          : 'Elegir este plan'
 
   return (
     <article
       className={`relative rounded-lg border bg-white p-5 shadow-soft ${featured ? 'border-mint-500 ring-2 ring-mint-500' : 'border-slate-200'}`}
     >
-      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">Mas elegido</p>}
+      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">{highlighted ? 'Plan sugerido' : 'Mas elegido'}</p>}
       <h3 className="text-2xl font-800 text-slate-950">{plan.name}</h3>
       <p className="mt-2 min-h-12 text-sm leading-6 text-slate-600">{plan.description}</p>
       <p className="mt-5 text-3xl font-800 text-slate-950">
@@ -203,14 +280,18 @@ function PlanCard({ plan }: { plan: Plan }) {
           featured ? 'bg-mint-500 text-white hover:bg-mint-700' : 'bg-brand-600 text-white hover:bg-brand-700'
         } disabled:cursor-not-allowed disabled:opacity-50`}
         type="button"
-        disabled={!plan.mp_subscription_url}
-        onClick={() => {
-          window.location.href = plan.mp_subscription_url
-        }}
+        disabled={isDisabled}
+        onClick={() => void onSelect(plan)}
       >
-        Continuar con este plan
+        {buttonText}
       </button>
-      <p className="mt-3 text-xs leading-5 text-slate-500">La activacion de la cuenta distribuidora queda gestionada desde admin.</p>
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        {activeDistributor
+          ? 'Tu cuenta ya esta activa. Puedes revisar la suscripcion desde el dashboard.'
+          : requiresSignup
+            ? 'Primero creamos tu cuenta distribuidora y luego te enviamos al checkout.'
+            : 'Registramos el plan elegido antes de abrir el checkout actual de Mercado Pago.'}
+      </p>
       <ul className="mt-5 grid gap-3 text-sm text-slate-700">
         {benefits.map((benefit) => (
           <li key={benefit} className="flex gap-2">
@@ -272,4 +353,16 @@ function CheckIcon() {
 
 function formatPrice(value: string) {
   return `$${Number(value).toLocaleString('es-AR')}`
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  if (!(error instanceof ApiError)) return fallback
+  if (typeof error.details === 'string' && error.details.trim()) return error.details
+  if (error.details && typeof error.details === 'object') {
+    const firstMessage = Object.values(error.details as Record<string, unknown>)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .find((value) => typeof value === 'string' && value.trim())
+    if (typeof firstMessage === 'string') return firstMessage
+  }
+  return fallback
 }

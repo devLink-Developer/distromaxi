@@ -3,6 +3,9 @@ import type {
   Commerce,
   Delivery,
   Distributor,
+  DistributorOnboardingState,
+  DistributorPlanSelectionResponse,
+  DistributorSignupResponse,
   DriverProfile,
   ImportJob,
   NotificationEvent,
@@ -73,8 +76,16 @@ export const api = {
     apiFetch<AuthResponse>('/auth/login', { method: 'POST', body: { email, password } }),
   register: (payload: Record<string, unknown>) =>
     apiFetch<User>('/auth/register', { method: 'POST', body: payload }),
+  registerDistributor: (payload: Record<string, unknown>) =>
+    apiFetch<DistributorSignupResponse>('/auth/register-distributor', { method: 'POST', body: payload }),
   me: () => apiFetch<User>('/auth/me'),
   plans: () => apiFetch<Plan[]>('/plans'),
+  distributorOnboarding: () => apiFetch<DistributorOnboardingState>('/distributor-onboarding'),
+  selectDistributorPlan: (planId: number) =>
+    apiFetch<DistributorPlanSelectionResponse>('/distributor-onboarding/select-plan', {
+      method: 'POST',
+      body: { plan_id: planId },
+    }),
   distributors: () => apiFetch<Distributor[]>('/distributors/'),
   distributor: (id: string | number) => apiFetch<Distributor>(`/distributors/${id}/`),
   products: (query = '') => apiFetch<Product[]>(`/products/${query}`),

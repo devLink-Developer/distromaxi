@@ -10,6 +10,7 @@ import {
   CustomersManagerPage,
   DashboardOrdersPage,
   DashboardPage,
+  DistributorProfilePage,
   DriversManagerPage,
   ImportsPage,
   ProductsManagerPage,
@@ -17,6 +18,7 @@ import {
   VehiclesManagerPage,
 } from '../pages/DashboardPages'
 import { DriverDeliveriesPage, DriverDeliveryDetailPage, TrackingPage } from '../pages/DriverPages'
+import { DistributorOnboardingPage, DistributorRegisterPage } from '../pages/DistributorOnboardingPages'
 import { LoginPage, RegisterPage } from '../pages/AuthPages'
 import { LandingPage } from '../pages/LandingPage'
 import { PlansPage } from '../pages/PlansPage'
@@ -32,6 +34,7 @@ import {
 import { ProtectedRoute } from '../routes/ProtectedRoute'
 import { useAuthStore } from '../stores/authStore'
 import { useNotificationStore } from '../stores/notificationStore'
+import { defaultRouteForUser } from '../utils/authRouting'
 
 export function App() {
   const bootstrap = useAuthStore((state) => state.bootstrap)
@@ -48,7 +51,11 @@ export function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/distributor/register" element={<DistributorRegisterPage />} />
       <Route path="/planes" element={<PlansPage />} />
+      <Route element={<ProtectedRoute roles={['DISTRIBUTOR']} allowPendingDistributor />}>
+        <Route path="/distributor/onboarding" element={<DistributorOnboardingPage />} />
+      </Route>
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/app" element={<RoleRedirect />} />
@@ -67,6 +74,7 @@ export function App() {
             <Route path="/dashboard/stock" element={<StockPage />} />
             <Route path="/dashboard/orders" element={<DashboardOrdersPage />} />
             <Route path="/dashboard/customers" element={<CustomersManagerPage />} />
+            <Route path="/dashboard/profile" element={<DistributorProfilePage />} />
             <Route path="/dashboard/drivers" element={<DriversManagerPage />} />
             <Route path="/dashboard/vehicles" element={<VehiclesManagerPage />} />
             <Route path="/dashboard/imports" element={<ImportsPage />} />
@@ -92,8 +100,6 @@ export function App() {
 
 function RoleRedirect() {
   const user = useAuthStore((state) => state.user)
-  if (user?.role === 'ADMIN') return <Navigate to="/admin/distributors" replace />
-  if (user?.role === 'DISTRIBUTOR') return <Navigate to="/dashboard" replace />
-  if (user?.role === 'DRIVER') return <Navigate to="/driver/deliveries" replace />
-  return <Navigate to="/home" replace />
+  if (!user) return <Navigate to="/login" replace />
+  return <Navigate to={defaultRouteForUser(user)} replace />
 }

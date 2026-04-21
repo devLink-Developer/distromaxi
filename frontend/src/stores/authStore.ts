@@ -9,6 +9,7 @@ type AuthState = {
   loading: boolean
   login: (email: string, password: string) => Promise<User>
   register: (payload: Record<string, unknown>) => Promise<void>
+  refreshUser: () => Promise<User | null>
   bootstrap: () => Promise<void>
   logout: () => void
   hasRole: (roles: Role[]) => boolean
@@ -32,6 +33,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
   async register(payload) {
     await api.register(payload)
+  },
+  async refreshUser() {
+    if (!localStorage.getItem('distromax_access')) return null
+    const user = await api.me()
+    set({ user, token: localStorage.getItem('distromax_access') })
+    return user
   },
   async bootstrap() {
     if (!localStorage.getItem('distromax_access')) return

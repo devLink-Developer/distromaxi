@@ -4,12 +4,38 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../../app/App'
+import { useAuthStore } from '../../stores/authStore'
 import { useCartStore } from '../../stores/cartStore'
 import type { Product } from '../../types/domain'
 import { LoginPage, RegisterPage } from '../AuthPages'
 import { CartPage, CheckoutPage, DistributorCatalogPage, HomePage } from '../CommercePages'
 import { AdminSubscriptionsPage } from '../DashboardPages'
+import { DistributorRegisterPage } from '../DistributorOnboardingPages'
 import { PlansPage } from '../PlansPage'
+
+const inactiveDistributorAccess = {
+  state: 'NONE' as const,
+  onboarding_status: null,
+  onboarding_id: null,
+  distributor_id: null,
+  distributor_name: null,
+}
+
+const pendingDistributorAccess = {
+  state: 'ONBOARDING' as const,
+  onboarding_status: 'CHECKOUT_PENDING',
+  onboarding_id: 7,
+  distributor_id: null,
+  distributor_name: null,
+}
+
+const activeDistributorAccess = {
+  state: 'ACTIVE' as const,
+  onboarding_status: 'ACTIVE',
+  onboarding_id: 7,
+  distributor_id: 3,
+  distributor_name: 'Distribuidora Andina',
+}
 
 const product: Product = {
   id: 1,
@@ -75,6 +101,8 @@ const distributor = {
   address: 'Av. San Martin 2450',
   city: 'Buenos Aires',
   province: 'CABA',
+  latitude: '-34.6037220',
+  longitude: '-58.3815920',
   currency: 'ARS',
   plan_name: 'Mayorista',
   subscription_status: 'ACTIVE',
@@ -95,6 +123,7 @@ describe('DistroMaxi frontend flows', () => {
   beforeEach(() => {
     localStorage.clear()
     useCartStore.setState({ items: [] })
+    useAuthStore.setState({ user: null, token: null, loading: false })
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -107,7 +136,15 @@ describe('DistroMaxi frontend flows', () => {
       jsonResponse({
         access: 'access-token',
         refresh: 'refresh-token',
-        user: { id: 1, email: 'ventas@andina.local', full_name: 'Ventas', phone: '', role: 'DISTRIBUTOR', is_active: true },
+        user: {
+          id: 1,
+          email: 'ventas@andina.local',
+          full_name: 'Ventas',
+          phone: '',
+          role: 'DISTRIBUTOR',
+          is_active: true,
+          distributor_access: activeDistributorAccess,
+        },
       }),
     )
 
@@ -133,6 +170,7 @@ describe('DistroMaxi frontend flows', () => {
         phone: '1111-2222',
         role: 'COMMERCE',
         is_active: true,
+        distributor_access: inactiveDistributorAccess,
       }),
     )
 
@@ -173,6 +211,84 @@ describe('DistroMaxi frontend flows', () => {
     expect(await screen.findByText(/cuenta de cliente creada/i)).toBeInTheDocument()
   })
 
+  it('registers distributors through the new public onboarding and auto logs in', async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/auth/register-distributor')) {
+        return jsonResponse({
+          user: {
+            id: 3,
+            email: 'delta@test.local',
+            full_name: 'Claudia Perez',
+            phone: '1111-2222',
+            role: 'DISTRIBUTOR',
+            is_active: true,
+            distributor_access: pendingDistributorAccess,
+          },
+          onboarding: {
+            access_state: 'ONBOARDING',
+            status: 'ACCOUNT_CREATED',
+            onboarding_id: 7,
+            distributor_id: null,
+            business_name: 'Distribuidora Delta',
+            tax_id: '30-12345678-9',
+            contact_name: 'Claudia Perez',
+            email: 'delta@test.local',
+            phone: '1111-2222',
+            selected_plan: null,
+            checkout_url: '',
+            review_reason: '',
+            failure_reason: '',
+            mercado_pago_status: '',
+            checkout_started_at: null,
+            activated_at: null,
+            created_at: null,
+            updated_at: null,
+          },
+        })
+      }
+      if (url.includes('/auth/login')) {
+        return jsonResponse({
+          access: 'dist-access',
+          refresh: 'dist-refresh',
+          user: {
+            id: 3,
+            email: 'delta@test.local',
+            full_name: 'Claudia Perez',
+            phone: '1111-2222',
+            role: 'DISTRIBUTOR',
+            is_active: true,
+            distributor_access: pendingDistributorAccess,
+          },
+        })
+      }
+      if (url.includes('/plans')) {
+        return jsonResponse([])
+      }
+      return jsonResponse({})
+    })
+
+    render(
+      <MemoryRouter>
+        <DistributorRegisterPage />
+      </MemoryRouter>,
+    )
+
+    await userEvent.type(screen.getByLabelText(/razon social/i), 'Distribuidora Delta')
+    await userEvent.type(screen.getByLabelText(/contacto principal/i), 'Claudia Perez')
+    await userEvent.type(screen.getByLabelText(/^email$/i), 'delta@test.local')
+    await userEvent.type(screen.getByLabelText(/telefono/i), '1111-2222')
+    await userEvent.type(screen.getByLabelText(/cuit/i), '30-12345678-9')
+    await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
+    await userEvent.click(screen.getByRole('button', { name: /continuar a planes/i }))
+
+    await waitFor(() => {
+      expect(localStorage.getItem('distromax_access')).toBe('dist-access')
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/auth/register-distributor'))).toBe(true)
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/auth/login'))).toBe(true)
+    })
+  })
+
   it('renders distributors before products', async () => {
     vi.mocked(fetch).mockReturnValue(jsonResponse([distributor]))
 
@@ -196,6 +312,7 @@ describe('DistroMaxi frontend flows', () => {
           description: 'Ideal para comenzar. Gestion basica de pedidos.',
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/start',
+          mp_preapproval_plan_id: 'start-plan',
           is_active: true,
           sort_order: 10,
           is_featured: false,
@@ -207,6 +324,7 @@ describe('DistroMaxi frontend flows', () => {
           description: 'Escala tu operacion. Estadisticas avanzadas. Mejor control.',
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
+          mp_preapproval_plan_id: 'pro-plan',
           is_active: true,
           sort_order: 20,
           is_featured: true,
@@ -220,10 +338,100 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Vende mas. Automatiza tu distribucion. Crece sin limites.')).toBeInTheDocument()
+    expect(screen.getByText(/vende mas\. automatiza tu distribucion/i)).toBeInTheDocument()
     expect(await screen.findByText('START')).toBeInTheDocument()
     expect(screen.getByText('Mas elegido')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/plans'), expect.any(Object))
+  })
+
+  it('starts checkout only after saving the selected plan for pending distributors', async () => {
+    useAuthStore.setState({
+      user: {
+        id: 3,
+        email: 'delta@test.local',
+        full_name: 'Claudia Perez',
+        phone: '1111-2222',
+        role: 'DISTRIBUTOR',
+        is_active: true,
+        distributor_access: pendingDistributorAccess,
+      },
+      token: 'dist-access',
+      loading: false,
+    })
+
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/distributor-onboarding/select-plan')) {
+        return jsonResponse({
+          checkout_url: 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=pro-plan',
+          onboarding: {
+            access_state: 'ONBOARDING',
+            status: 'CHECKOUT_PENDING',
+            onboarding_id: 7,
+            distributor_id: null,
+            business_name: 'Distribuidora Delta',
+            tax_id: '30-12345678-9',
+            contact_name: 'Claudia Perez',
+            email: 'delta@test.local',
+            phone: '1111-2222',
+            selected_plan: {
+              id: 2,
+              name: 'PRO',
+              price: '49900.00',
+              description: 'Escala tu operacion.',
+              currency: 'ARS',
+              mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
+              mp_preapproval_plan_id: 'pro-plan',
+              is_active: true,
+              sort_order: 20,
+              is_featured: true,
+            },
+            checkout_url: 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=pro-plan',
+            review_reason: '',
+            failure_reason: '',
+            mercado_pago_status: '',
+            checkout_started_at: null,
+            activated_at: null,
+            created_at: null,
+            updated_at: null,
+          },
+        })
+      }
+      if (url.includes('/plans')) {
+        return jsonResponse([
+          {
+            id: 2,
+            name: 'PRO',
+            price: '49900.00',
+            description: 'Escala tu operacion.',
+            currency: 'ARS',
+            mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
+            mp_preapproval_plan_id: 'pro-plan',
+            is_active: true,
+            sort_order: 20,
+            is_featured: true,
+          },
+        ])
+      }
+      return jsonResponse([])
+    })
+
+    render(
+      <MemoryRouter>
+        <PlansPage />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: /elegir este plan/i }))
+
+    await waitFor(() => {
+      const selectPlanCall = vi
+        .mocked(fetch)
+        .mock.calls.find(([url]) => String(url).includes('/distributor-onboarding/select-plan'))
+      expect(selectPlanCall).toBeTruthy()
+      expect(selectPlanCall?.[1]).toMatchObject({ method: 'POST' })
+      expect(JSON.parse(String(selectPlanCall?.[1]?.body))).toMatchObject({ plan_id: 2 })
+    })
   })
 
   it('lets admins configure Mercado Pago URLs for subscription plans', async () => {
@@ -236,6 +444,7 @@ describe('DistroMaxi frontend flows', () => {
         description: 'Ideal para comenzar. Gestion basica de pedidos.',
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/start',
+        mp_preapproval_plan_id: 'start-plan',
         is_active: true,
         sort_order: 10,
         is_featured: false,
@@ -249,6 +458,7 @@ describe('DistroMaxi frontend flows', () => {
         description: 'Escala tu operacion. Estadisticas avanzadas.',
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
+        mp_preapproval_plan_id: 'pro-plan',
         is_active: true,
         sort_order: 20,
         is_featured: true,
@@ -260,7 +470,7 @@ describe('DistroMaxi frontend flows', () => {
     vi.mocked(fetch).mockImplementation((input, options) => {
       const url = String(input)
       if (url.includes('/plans/1/') && options?.method === 'PATCH') {
-        return jsonResponse({ ...plans[0], mp_subscription_url: updatedUrl })
+        return jsonResponse({ ...plans[0], mp_subscription_url: updatedUrl, mp_preapproval_plan_id: 'start-updated' })
       }
       if (url.includes('/plans')) return jsonResponse(plans)
       if (url.includes('/subscriptions')) return jsonResponse([])
@@ -279,6 +489,8 @@ describe('DistroMaxi frontend flows', () => {
     const urlInput = screen.getByLabelText(/link mercado pago/i)
     await userEvent.clear(urlInput)
     await userEvent.type(urlInput, updatedUrl)
+    await userEvent.clear(screen.getByLabelText(/preapproval plan id/i))
+    await userEvent.type(screen.getByLabelText(/preapproval plan id/i), 'start-updated')
     await userEvent.click(screen.getByRole('button', { name: /guardar cambios/i }))
 
     await waitFor(() => {
@@ -288,6 +500,7 @@ describe('DistroMaxi frontend flows', () => {
       expect(updateCall).toBeTruthy()
       expect(JSON.parse(String(updateCall?.[1]?.body))).toMatchObject({
         mp_subscription_url: updatedUrl,
+        mp_preapproval_plan_id: 'start-updated',
         is_active: true,
       })
     })
