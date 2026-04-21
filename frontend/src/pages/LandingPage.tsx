@@ -45,21 +45,31 @@ export function LandingPage() {
           alt="Centro de distribucion con pedidos listos para despacho"
         />
         <div className="absolute inset-0 bg-emerald-950/70" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,44,34,0.84)_0%,rgba(2,44,34,0.74)_44%,rgba(2,44,34,0.56)_100%),linear-gradient(180deg,rgba(2,44,34,0.18)_0%,rgba(2,44,34,0.46)_100%)]" />
-        <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <Link className="text-lg font-800 text-white" to="/">
-            DistroMaxi
-          </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/planes">
-              Soy distribuidora
+        <nav className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+          <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
+            <Link className="text-xl font-800 text-white sm:text-lg" to="/">
+              DistroMaxi
             </Link>
-            <Link className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/login">
-              Ingresar
-            </Link>
-            <Link className="inline-flex min-h-11 items-center rounded-md bg-white px-4 text-sm font-800 text-emerald-950 transition hover:bg-emerald-50" to="/register">
-              Crear cuenta cliente
-            </Link>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
+              <Link
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+                to="/planes"
+              >
+                Soy distribuidora
+              </Link>
+              <Link
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+                to="/login"
+              >
+                Ingresar
+              </Link>
+              <Link
+                className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-800 text-emerald-950 transition hover:bg-emerald-50 sm:col-span-1 sm:rounded-md"
+                to="/register"
+              >
+                Crear cuenta cliente
+              </Link>
+            </div>
           </div>
         </nav>
 

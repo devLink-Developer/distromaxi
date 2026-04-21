@@ -211,17 +211,25 @@ export function DistributorOnboardingPage() {
     <main className="min-h-dvh bg-slate-50 text-slate-950">
       <section className="relative isolate overflow-hidden bg-emerald-950">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.22),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(255,255,255,0.12),_transparent_28%)]" />
-        <nav className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
-          <Link className="text-lg font-800 text-white" to="/">
-            DistroMaxi
-          </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link className="inline-flex min-h-11 items-center rounded-md px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/planes">
-              Ver planes
+        <nav className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+          <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
+            <Link className="text-xl font-800 text-white sm:text-lg" to="/">
+              DistroMaxi
             </Link>
-            <Link className="inline-flex min-h-11 items-center rounded-md border border-white/20 px-3 text-sm font-800 text-white transition hover:bg-white/10" to="/login">
-              Cambiar cuenta
-            </Link>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
+              <Link
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+                to="/planes"
+              >
+                Ver planes
+              </Link>
+              <Link
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-white/20 sm:bg-transparent sm:px-3"
+                to="/login"
+              >
+                Cambiar cuenta
+              </Link>
+            </div>
           </div>
         </nav>
         <div className="relative z-10 mx-auto max-w-7xl px-4 pb-12 pt-6 sm:px-6 lg:px-8">
