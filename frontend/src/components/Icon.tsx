@@ -2,6 +2,8 @@ type IconName =
   | 'home'
   | 'box'
   | 'cart'
+  | 'close'
+  | 'menu'
   | 'orders'
   | 'truck'
   | 'users'
@@ -17,6 +19,8 @@ const paths: Record<IconName, string> = {
   home: 'M3 11.5 12 4l9 7.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5Z',
   box: 'M21 8.5 12 3 3 8.5l9 5.5 9-5.5ZM3 10.5V18l9 5.5V16L3 10.5Zm18 0L12 16v7.5l9-5.5v-7.5Z',
   cart: 'M5 6h16l-2 8H8L6 3H3m6 16a1 1 0 1 0 0 2 1 1 0 0 0 0-2Zm9 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z',
+  close: 'M6 6l12 12M18 6 6 18',
+  menu: 'M4 7h16M4 12h16M4 17h16',
   orders: 'M7 3h10v4H7V3Zm-2 7h14v11H5V10Zm4 4h6m-6 4h4',
   truck: 'M3 7h11v9H3V7Zm11 3h4l3 4v2h-7v-6ZM7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
   users: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-12 9c1.5-3 4.2-5 8-5s6.5 2 8 5M19 8a3 3 0 0 1 0 6m-14 0a3 3 0 0 1 0-6',
