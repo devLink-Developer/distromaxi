@@ -14,6 +14,7 @@ import type {
   Order,
   Plan,
   PostalCodeLookup,
+  ReverseGeocodedAddress,
   Product,
   ProductCategory,
   ProductSubCategory,
@@ -92,6 +93,13 @@ export const api = {
         number: params.number,
         locality: params.locality,
         province: params.province,
+      }).toString()}`,
+    ),
+  reverseGeocodeAddress: (params: { latitude: string; longitude: string }) =>
+    apiFetch<ReverseGeocodedAddress>(
+      `/address/reverse-geocode?${new URLSearchParams({
+        latitude: params.latitude,
+        longitude: params.longitude,
       }).toString()}`,
     ),
   me: () => apiFetch<User>('/auth/me'),

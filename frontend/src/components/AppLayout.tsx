@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { useAuthStore } from '../stores/authStore'
+import { BrandLogo } from './BrandLogo'
 import { Icon } from './Icon'
 
 const commerceLinks = [
@@ -50,7 +51,7 @@ export function AppLayout() {
 
   return (
     <div className="min-h-dvh bg-slate-50">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200 bg-white px-5 py-6 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-[950] hidden w-72 border-r border-slate-200 bg-white px-5 py-6 lg:block">
         <Brand />
         <nav className="mt-8 grid gap-2" aria-label="Navegacion principal">
           {links.map((link) => (
@@ -60,7 +61,7 @@ export function AppLayout() {
       </aside>
 
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:px-8">
+        <header className="sticky top-0 z-[960] border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:px-8">
           <div className="flex items-center justify-between gap-4">
             <div className="lg:hidden">
               <Brand compact />
@@ -88,7 +89,7 @@ export function AppLayout() {
       </div>
 
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white px-2 py-2 shadow-soft lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-[970] grid grid-cols-4 border-t border-slate-200 bg-white px-2 py-2 shadow-soft lg:hidden"
         aria-label="Navegacion inferior"
       >
         {links.slice(0, 4).map((link) => (
@@ -101,17 +102,7 @@ export function AppLayout() {
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="grid h-11 w-11 place-items-center rounded-lg bg-brand-600 text-white">
-        <Icon name="truck" />
-      </div>
-      {!compact && (
-        <div>
-          <p className="text-lg font-800 text-slate-950">DistroMaxi</p>
-          <p className="text-xs font-semibold text-slate-500">Pedidos y entregas</p>
-        </div>
-      )}
-    </div>
+    <BrandLogo className={compact ? '' : 'rounded-[1.25rem] border border-slate-200 bg-slate-50 px-3 py-2'} compact={compact} />
   )
 }
 

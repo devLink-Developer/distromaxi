@@ -38,7 +38,7 @@ from apps.notifications.views import NotificationEventViewSet, PushSubscriptionV
 from apps.orders.views import OrderViewSet
 from apps.products.views import ProductCategoryViewSet, ProductSubCategoryViewSet, ProductSupplierViewSet, ProductViewSet
 from apps.routing.views import DriverCurrentRouteView, RoutePlanViewSet, RouteStopViewSet
-from apps.users.views import AddressGeocodeView, CustomTokenObtainPairView, MeView, PostalCodeLookupView, RegisterView, UserViewSet
+from apps.users.views import AddressGeocodeView, AddressReverseGeocodeView, CustomTokenObtainPairView, MeView, PostalCodeLookupView, RegisterView, UserViewSet
 
 router = DefaultRouter()
 router.register('users', UserViewSet, basename='users')
@@ -73,6 +73,7 @@ urlpatterns = [
     path('api/auth/me', MeView.as_view(), name='auth-me'),
     path('api/address/postal-code', PostalCodeLookupView.as_view(), name='address-postal-code'),
     path('api/address/geocode', AddressGeocodeView.as_view(), name='address-geocode'),
+    path('api/address/reverse-geocode', AddressReverseGeocodeView.as_view(), name='address-reverse-geocode'),
     path('api/distributor-onboarding', DistributorOnboardingStateView.as_view(), name='distributor-onboarding'),
     path('api/distributor-onboarding/select-plan', DistributorOnboardingPlanSelectionView.as_view(), name='distributor-onboarding-select-plan'),
     path('api/billing/mercadopago/webhook', MercadoPagoSubscriptionWebhookView.as_view(), name='billing-mercadopago-webhook'),

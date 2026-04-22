@@ -5,9 +5,10 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.views import APIView
 
-from .address_services import AddressServiceError, geocode_address, lookup_postal_code
+from .address_services import AddressServiceError, geocode_address, lookup_postal_code, reverse_geocode
 from .serializers import (
     AddressGeocodeSerializer,
+    AddressReverseGeocodeSerializer,
     CustomTokenObtainPairSerializer,
     PostalCodeLookupSerializer,
     RegisterSerializer,
@@ -47,6 +48,19 @@ class AddressGeocodeView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             payload = geocode_address(**serializer.validated_data)
+        except AddressServiceError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(payload)
+
+
+class AddressReverseGeocodeView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        serializer = AddressReverseGeocodeSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            payload = reverse_geocode(**serializer.validated_data)
         except AddressServiceError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(payload)

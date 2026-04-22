@@ -92,6 +92,11 @@ class AddressGeocodeSerializer(serializers.Serializer):
     province = serializers.CharField(max_length=180)
 
 
+class AddressReverseGeocodeSerializer(serializers.Serializer):
+    latitude = serializers.DecimalField(max_digits=10, decimal_places=7)
+    longitude = serializers.DecimalField(max_digits=10, decimal_places=7)
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = User.EMAIL_FIELD
 

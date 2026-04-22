@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom'
 
+import { BrandLogo } from '../components/BrandLogo'
+
 const purchaseHighlights = [
   { value: '24/7', label: 'catalogos listos para comprar cuando tu negocio lo necesita' },
   { value: 'Stock al dia', label: 'precios y disponibilidad claros antes de confirmar' },
@@ -47,9 +49,7 @@ export function LandingPage() {
         <div className="absolute inset-0 bg-emerald-950/70" />
         <nav className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
           <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-            <Link className="text-xl font-800 text-white sm:text-lg" to="/">
-              DistroMaxi
-            </Link>
+            <BrandLogo className="justify-start" dark to="/" />
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
               <Link
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"

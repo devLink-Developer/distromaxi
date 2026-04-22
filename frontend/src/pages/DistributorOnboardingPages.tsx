@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { BrandLogo } from '../components/BrandLogo'
 import { ApiError, api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import type { DistributorOnboardingState } from '../types/domain'
@@ -212,9 +213,7 @@ export function DistributorOnboardingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.22),_transparent_42%),radial-gradient(circle_at_top_right,_rgba(255,255,255,0.12),_transparent_28%)]" />
         <nav className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
           <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-            <Link className="text-xl font-800 text-white sm:text-lg" to="/">
-              DistroMaxi
-            </Link>
+            <BrandLogo className="justify-start" dark to="/" />
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
               <Link
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
@@ -346,9 +345,7 @@ function DistributorShell({
 
       <div className="relative z-10 mx-auto flex min-h-dvh max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <nav className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-          <Link className="text-xl font-800 text-white sm:text-lg" to="/">
-            DistroMaxi
-          </Link>
+          <BrandLogo className="justify-start" dark to="/" />
           <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
             <Link
               className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"

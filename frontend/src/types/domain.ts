@@ -372,8 +372,18 @@ export type PostalCodeLookup = {
 
 export type GeocodedAddress = {
   address: string
+  street: string
+  number: string
   city: string
   province: string
+  latitude: number
+  longitude: number
+}
+
+export type ReverseGeocodedAddress = {
+  address: string
+  street: string
+  number: string
   latitude: number
   longitude: number
 }
