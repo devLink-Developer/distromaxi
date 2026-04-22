@@ -70,3 +70,50 @@ class PublicRegisterTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("role", response.data)
+
+    def test_postal_code_lookup_endpoint_returns_city_and_localities(self):
+        from unittest.mock import patch
+
+        payload = {
+            "country": "Argentina",
+            "places": [
+                {"place name": "FLORIDA", "state": "BUENOS AIRES"},
+                {"place name": "MUNOZ", "state": "BUENOS AIRES"},
+            ],
+        }
+        with patch("apps.users.address_services._get_json", return_value=payload):
+            response = self.client.get("/api/address/postal-code", {"postal_code": "1602"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["postal_code"], "1602")
+        self.assertEqual(response.data["province"], "BUENOS AIRES")
+        self.assertEqual(response.data["localities"], ["FLORIDA", "MUNOZ"])
+
+    def test_address_geocode_endpoint_returns_coordinates(self):
+        from unittest.mock import patch
+
+        payload = {
+            "direcciones": [
+                {
+                    "nomenclatura": "HUMBOLDT 1400, Ciudad Autonoma de Buenos Aires",
+                    "provincia": {"nombre": "Ciudad Autonoma de Buenos Aires"},
+                    "localidad_censal": {"nombre": "CABA"},
+                    "ubicacion": {"lat": -34.58, "lon": -58.43},
+                }
+            ]
+        }
+        with patch("apps.users.address_services._get_json", return_value=payload):
+            response = self.client.get(
+                "/api/address/geocode",
+                {
+                    "street": "Humboldt",
+                    "number": "1400",
+                    "locality": "CABA",
+                    "province": "CABA",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["address"], "HUMBOLDT 1400, Ciudad Autonoma de Buenos Aires")
+        self.assertEqual(response.data["city"], "CABA")
+        self.assertEqual(response.data["latitude"], -34.58)

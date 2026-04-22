@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts'
 
+import { AddressEditor } from '../components/AddressEditor'
 import { EmptyState } from '../components/EmptyState'
 import { ResourceManager } from '../components/ResourceManager'
 import { StatusBadge } from '../components/StatusBadge'
@@ -386,16 +387,24 @@ export function CustomersManagerPage() {
         { name: 'contact_name', label: 'Contacto', required: true },
         { name: 'email', label: 'Email', type: 'email' },
         { name: 'phone', label: 'Telefono', required: true },
+        { name: 'postal_code', label: 'Codigo postal' },
         { name: 'address', label: 'Direccion', required: true },
         { name: 'city', label: 'Ciudad' },
         { name: 'province', label: 'Provincia' },
+        { name: 'latitude', label: 'Latitud', type: 'number' },
+        { name: 'longitude', label: 'Longitud', type: 'number' },
+        { name: 'default_window_start', label: 'Franja desde', type: 'time' },
+        { name: 'default_window_end', label: 'Franja hasta', type: 'time' },
         { name: 'delivery_notes', label: 'Notas de entrega', type: 'textarea' },
       ]}
       columns={[
         { key: 'trade_name', label: 'Comercio' },
         { key: 'tax_id', label: 'CUIT' },
         { key: 'phone', label: 'Telefono' },
+        { key: 'postal_code', label: 'CP' },
         { key: 'address', label: 'Direccion' },
+        { key: 'default_window_start', label: 'Desde' },
+        { key: 'default_window_end', label: 'Hasta' },
       ]}
     />
   )
@@ -414,6 +423,7 @@ export function VehiclesManagerPage() {
         { name: 'model', label: 'Modelo' },
         { name: 'year', label: 'Ano', type: 'number' },
         { name: 'capacity_kg', label: 'Capacidad kg', type: 'number' },
+        { name: 'capacity_m3', label: 'Capacidad m3', type: 'number' },
         { name: 'insurance_expires_at', label: 'Vence seguro', type: 'date' },
         { name: 'inspection_expires_at', label: 'Vence VTV', type: 'date' },
       ]}
@@ -421,6 +431,7 @@ export function VehiclesManagerPage() {
         { key: 'plate', label: 'Patente' },
         { key: 'vehicle_type', label: 'Tipo' },
         { key: 'brand', label: 'Marca' },
+        { key: 'capacity_m3', label: 'm3' },
         { key: 'status', label: 'Estado' },
       ]}
     />
@@ -627,45 +638,76 @@ export function BillingPage() {
 export function DistributorProfilePage() {
   const [profile, setProfile] = useState<Distributor | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [savingContact, setSavingContact] = useState(false)
+  const [savingAddress, setSavingAddress] = useState(false)
+  const [contactMessage, setContactMessage] = useState('')
+  const [contactError, setContactError] = useState('')
+  const [addressMessage, setAddressMessage] = useState('')
+  const [addressError, setAddressError] = useState('')
 
   useEffect(() => {
     void api
       .distributors()
       .then((rows) => {
         setProfile(rows[0] ?? null)
-        setError('')
+        setContactError('')
+        setAddressError('')
       })
-      .catch(() => setError('No pudimos cargar los datos de la distribuidora.'))
+      .catch(() => setContactError('No pudimos cargar los datos de la distribuidora.'))
       .finally(() => setLoading(false))
   }, [])
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!profile) return
-    setSaving(true)
-    setMessage('')
-    setError('')
+    setSavingContact(true)
+    setContactMessage('')
+    setContactError('')
     const form = new FormData(event.currentTarget)
     try {
       const updated = await api.update<Distributor>('distributors', profile.id, {
         contact_name: form.get('contact_name'),
         email: form.get('email'),
         phone: form.get('phone'),
-        address: form.get('address'),
-        city: form.get('city'),
-        province: form.get('province'),
-        latitude: String(form.get('latitude') || '').trim() || null,
-        longitude: String(form.get('longitude') || '').trim() || null,
       })
       setProfile(updated)
-      setMessage('Datos actualizados.')
+      setContactMessage('Datos operativos actualizados.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo guardar el perfil.')
+      setContactError(caught instanceof Error ? caught.message : 'No se pudo guardar el perfil.')
     } finally {
-      setSaving(false)
+      setSavingContact(false)
+    }
+  }
+
+  async function saveAddress(value: {
+    postal_code: string
+    address: string
+    city: string
+    province: string
+    latitude: string | null
+    longitude: string | null
+    notes: string
+  }) {
+    if (!profile) return
+    setSavingAddress(true)
+    setAddressMessage('')
+    setAddressError('')
+    try {
+      const updated = await api.update<Distributor>('distributors', profile.id, {
+        postal_code: value.postal_code,
+        address: value.address,
+        city: value.city,
+        province: value.province,
+        address_notes: value.notes,
+        latitude: value.latitude,
+        longitude: value.longitude,
+      })
+      setProfile(updated)
+      setAddressMessage('Direccion principal actualizada.')
+    } catch (caught) {
+      setAddressError(caught instanceof Error ? caught.message : 'No se pudo guardar la direccion.')
+    } finally {
+      setSavingAddress(false)
     }
   }
 
@@ -682,10 +724,10 @@ export function DistributorProfilePage() {
       <div>
         <p className="text-sm font-800 uppercase text-brand-700">Direccion principal</p>
         <h1 className="mt-2 text-2xl font-800 text-slate-950">Perfil de la distribuidora</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Completa la direccion principal y el punto del mapa que usa tu distribuidora.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Primero mantienes los datos operativos y despues gestionas la direccion principal con el mismo flujo guiado de alta o edicion.</p>
       </div>
 
-      <form className="grid gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-soft" onSubmit={(event) => void submit(event)}>
+      <form className="grid gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-soft" onSubmit={(event) => void submitContact(event)}>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="grid gap-1 text-sm font-700 text-slate-700">
             Razon social
@@ -707,38 +749,35 @@ export function DistributorProfilePage() {
             Email operativo
             <input className="min-h-11 rounded-md border border-slate-300 px-3" name="email" type="email" defaultValue={profile.email} required />
           </label>
-          <label className="grid gap-1 text-sm font-700 text-slate-700 md:col-span-2">
-            Direccion principal
-            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="address" defaultValue={profile.address} required />
-          </label>
-          <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Ciudad
-            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="city" defaultValue={profile.city} />
-          </label>
-          <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Provincia
-            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="province" defaultValue={profile.province} />
-          </label>
-          <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Latitud
-            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="latitude" type="number" step="any" defaultValue={profile.latitude ?? ''} />
-          </label>
-          <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Longitud
-            <input className="min-h-11 rounded-md border border-slate-300 px-3" name="longitude" type="number" step="any" defaultValue={profile.longitude ?? ''} />
-          </label>
         </div>
-        <p className="rounded-[1.25rem] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
-          En esta version usamos una sola direccion principal. Si queres, tambien podes guardar el punto del mapa.
-        </p>
-        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
-        {message && <p className="rounded-md bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">{message}</p>}
+        {contactError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{contactError}</p>}
+        {contactMessage && <p className="rounded-md bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">{contactMessage}</p>}
         <div className="flex justify-end">
-          <button className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={saving} type="submit">
-            {saving ? 'Guardando...' : 'Guardar direccion'}
+          <button className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={savingContact} type="submit">
+            {savingContact ? 'Guardando...' : 'Guardar datos operativos'}
           </button>
         </div>
       </form>
+
+      <AddressEditor
+        title={profile.address ? 'Editar direccion principal' : 'Cargar direccion principal'}
+        description="La base operativa de la distribuidora define el origen del ruteo. Por eso pedimos codigo postal, localidad valida y geolocalizacion confirmada."
+        notesLabel="Indicaciones adicionales"
+        saveLabel="Guardar direccion principal"
+        initialValue={{
+          postal_code: profile.postal_code ?? '',
+          address: profile.address ?? '',
+          city: profile.city ?? '',
+          province: profile.province ?? '',
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          notes: profile.address_notes ?? '',
+        }}
+        saving={savingAddress}
+        error={addressError}
+        message={addressMessage}
+        onSave={saveAddress}
+      />
     </section>
   )
 }
@@ -767,7 +806,11 @@ export function AdminDistributorsPage() {
         { name: 'contact_name', label: 'Contacto', required: true },
         { name: 'email', label: 'Email', type: 'email', required: true },
         { name: 'phone', label: 'Telefono', required: true },
+        { name: 'postal_code', label: 'Codigo postal' },
         { name: 'address', label: 'Direccion principal' },
+        { name: 'city', label: 'Ciudad' },
+        { name: 'province', label: 'Provincia' },
+        { name: 'address_notes', label: 'Indicaciones', type: 'textarea' },
         { name: 'plan_name', label: 'Plan' },
         { name: 'mercado_pago_link', label: 'Enlace de pago' },
       ]}

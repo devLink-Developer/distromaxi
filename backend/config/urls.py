@@ -37,7 +37,8 @@ from apps.inventory.views import StockItemViewSet, StockMovementViewSet, Warehou
 from apps.notifications.views import NotificationEventViewSet, PushSubscriptionViewSet
 from apps.orders.views import OrderViewSet
 from apps.products.views import ProductCategoryViewSet, ProductSubCategoryViewSet, ProductSupplierViewSet, ProductViewSet
-from apps.users.views import CustomTokenObtainPairView, MeView, RegisterView, UserViewSet
+from apps.routing.views import DriverCurrentRouteView, RoutePlanViewSet, RouteStopViewSet
+from apps.users.views import AddressGeocodeView, CustomTokenObtainPairView, MeView, PostalCodeLookupView, RegisterView, UserViewSet
 
 router = DefaultRouter()
 router.register('users', UserViewSet, basename='users')
@@ -59,6 +60,8 @@ router.register('notifications', NotificationEventViewSet, basename='notificatio
 router.register('plans', PlanViewSet, basename='plans')
 router.register('subscriptions', SubscriptionViewSet, basename='subscriptions')
 router.register('imports', ImportJobViewSet, basename='imports')
+router.register('route-plans', RoutePlanViewSet, basename='route-plans')
+router.register('route-stops', RouteStopViewSet, basename='route-stops')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -68,10 +71,13 @@ urlpatterns = [
     path('api/auth/login', CustomTokenObtainPairView.as_view(), name='auth-login'),
     path('api/auth/refresh', TokenRefreshView.as_view(), name='auth-refresh'),
     path('api/auth/me', MeView.as_view(), name='auth-me'),
+    path('api/address/postal-code', PostalCodeLookupView.as_view(), name='address-postal-code'),
+    path('api/address/geocode', AddressGeocodeView.as_view(), name='address-geocode'),
     path('api/distributor-onboarding', DistributorOnboardingStateView.as_view(), name='distributor-onboarding'),
     path('api/distributor-onboarding/select-plan', DistributorOnboardingPlanSelectionView.as_view(), name='distributor-onboarding-select-plan'),
     path('api/billing/mercadopago/webhook', MercadoPagoSubscriptionWebhookView.as_view(), name='billing-mercadopago-webhook'),
     path('api/dashboard/', include('apps.dashboard.urls')),
+    path('api/routes/me/current/', DriverCurrentRouteView.as_view(), name='driver-current-route'),
     path('api/', include(router.urls)),
 ]
 

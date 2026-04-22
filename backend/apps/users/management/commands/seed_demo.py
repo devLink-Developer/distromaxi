@@ -36,9 +36,11 @@ class Command(BaseCommand):
                 "contact_name": "Sofía Rivas",
                 "email": "ventas@andina.local",
                 "phone": "+54 11 5555-0100",
+                "postal_code": "1414",
                 "address": "Av. San Martín 2450",
                 "city": "Buenos Aires",
                 "province": "CABA",
+                "address_notes": "Ingresar por la darsena principal.",
                 "latitude": Decimal("-34.6037220"),
                 "longitude": Decimal("-58.3815920"),
                 "subscription_status": "ACTIVE",
@@ -87,11 +89,14 @@ class Command(BaseCommand):
                 "contact_name": "Clara Luna",
                 "email": "compras@almacenluna.local",
                 "phone": "+54 11 5555-0200",
+                "postal_code": "1414",
                 "address": "Humboldt 1400",
                 "city": "Buenos Aires",
                 "province": "CABA",
                 "latitude": Decimal("-34.5841000"),
                 "longitude": Decimal("-58.4351000"),
+                "default_window_start": "08:00",
+                "default_window_end": "14:00",
                 "delivery_notes": "Recibir por entrada lateral de 8 a 14.",
                 "active": True,
             },
@@ -158,6 +163,7 @@ class Command(BaseCommand):
                 "model": "Kangoo",
                 "year": 2022,
                 "capacity_kg": Decimal("750.00"),
+                "capacity_m3": Decimal("9.500"),
                 "status": "AVAILABLE",
                 "insurance_expires_at": date.today() + timedelta(days=180),
                 "inspection_expires_at": date.today() + timedelta(days=220),
@@ -186,9 +192,12 @@ class Command(BaseCommand):
             defaults={
                 "total": Decimal("52600.00"),
                 "status": "DELIVERED",
+                "dispatch_date": date.today() - timedelta(days=1),
                 "delivery_address": commerce.address,
                 "delivery_latitude": commerce.latitude,
                 "delivery_longitude": commerce.longitude,
+                "delivery_window_start": commerce.default_window_start,
+                "delivery_window_end": commerce.default_window_end,
             },
         )
         delivered_order.items.all().delete()
@@ -205,9 +214,12 @@ class Command(BaseCommand):
             defaults={
                 "total": Decimal("43600.00"),
                 "status": "ACCEPTED",
+                "dispatch_date": date.today() + timedelta(days=1),
                 "delivery_address": commerce.address,
                 "delivery_latitude": commerce.latitude,
                 "delivery_longitude": commerce.longitude,
+                "delivery_window_start": commerce.default_window_start,
+                "delivery_window_end": commerce.default_window_end,
             },
         )
         pending_order.items.all().delete()
@@ -246,4 +258,21 @@ class Command(BaseCommand):
             quantity=quantity,
             price=product.price,
             subtotal=Decimal(product.price) * Decimal(quantity),
+            weight_kg=self._weight_total_kg(product, quantity),
+            volume_m3=self._volume_total_m3(product, quantity),
         )
+
+    def _weight_total_kg(self, product, quantity):
+        factor = Decimal("0.001") if product.weight_unit == "g" else Decimal("1")
+        return (Decimal(product.weight) * factor * Decimal(quantity)).quantize(Decimal("0.001"))
+
+    def _volume_total_m3(self, product, quantity):
+        unit_factor = {
+            "mm": Decimal("0.001"),
+            "cm": Decimal("0.01"),
+            "m": Decimal("1"),
+        }[product.dimension_unit]
+        length_m = Decimal(product.length) * unit_factor
+        width_m = Decimal(product.width) * unit_factor
+        height_m = Decimal(product.height) * unit_factor
+        return (length_m * width_m * height_m * Decimal(quantity)).quantize(Decimal("0.000001"))

@@ -33,9 +33,11 @@ export type Distributor = {
   contact_name: string
   email: string
   phone: string
+  postal_code: string
   address: string
   city: string
   province: string
+  address_notes: string
   latitude: string | null
   longitude: string | null
   currency: string
@@ -181,9 +183,14 @@ export type Commerce = {
   contact_name: string
   email: string
   phone: string
+  postal_code: string
   address: string
   city: string
   province: string
+  latitude: string | null
+  longitude: string | null
+  default_window_start: string | null
+  default_window_end: string | null
   delivery_notes: string
   active: boolean
 }
@@ -207,6 +214,7 @@ export type Vehicle = {
   model: string
   year: number | null
   capacity_kg: string | null
+  capacity_m3: string | null
   status: string
   active: boolean
 }
@@ -232,6 +240,8 @@ export type OrderItem = {
   quantity: string
   price: string
   subtotal: string
+  weight_kg: string
+  volume_m3: string
 }
 
 export type Order = {
@@ -242,10 +252,16 @@ export type Order = {
   distributor_name: string
   total: string
   status: string
+  dispatch_date: string
   delivery_address: string
+  delivery_latitude?: string | null
+  delivery_longitude?: string | null
+  delivery_window_start: string | null
+  delivery_window_end: string | null
   notes: string
   items: OrderItem[]
   created_at: string
+  updated_at?: string
 }
 
 export type DeliveryLocation = {
@@ -269,6 +285,97 @@ export type Delivery = {
   last_accuracy_m: string | null
   last_location_at: string | null
   locations: DeliveryLocation[]
+  route_run_id: number | null
+  stop_sequence: number | null
+  planned_eta: string | null
+}
+
+export type RouteStop = {
+  id: number
+  order: number
+  delivery_id: number | null
+  order_status: string
+  commerce_name: string
+  delivery_address: string
+  delivery_latitude: string | null
+  delivery_longitude: string | null
+  sequence: number
+  status: string
+  planned_eta: string
+  window_start_at: string
+  window_end_at: string
+  leg_distance_km: string
+  leg_duration_min: string
+  demand_kg: string
+  demand_m3: string
+}
+
+export type RouteRun = {
+  id: number
+  sequence: number
+  status: string
+  driver: number
+  driver_name: string
+  vehicle: number
+  vehicle_plate: string
+  total_stops: number
+  total_distance_km: string
+  total_duration_min: string
+  load_kg: string
+  load_m3: string
+  stops: RouteStop[]
+}
+
+export type RoutePlan = {
+  id: number
+  distributor: number
+  distributor_name: string
+  dispatch_date: string
+  status: string
+  provider: string
+  total_runs: number
+  total_orders: number
+  total_distance_km: string
+  total_duration_min: string
+  total_load_kg: string
+  total_load_m3: string
+  unassigned_summary: Array<{ order_id: number; reason: string }>
+  can_delete: boolean
+  runs: RouteRun[]
+  created_at: string
+  updated_at: string
+}
+
+export type CurrentRoute = {
+  id: number
+  route_plan_id: number
+  route_plan_status: string
+  sequence: number
+  status: string
+  driver_name: string
+  vehicle_plate: string
+  total_stops: number
+  total_distance_km: string
+  total_duration_min: string
+  load_kg: string
+  load_m3: string
+  active_stop_id: number | null
+  stops: RouteStop[]
+}
+
+export type PostalCodeLookup = {
+  postal_code: string
+  city: string
+  province: string
+  localities: string[]
+}
+
+export type GeocodedAddress = {
+  address: string
+  city: string
+  province: string
+  latitude: number
+  longitude: number
 }
 
 export type NotificationEvent = {

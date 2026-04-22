@@ -1,20 +1,25 @@
 import type {
   AuthResponse,
   Commerce,
+  CurrentRoute,
   Delivery,
   Distributor,
   DistributorOnboardingState,
   DistributorPlanSelectionResponse,
   DistributorSignupResponse,
   DriverProfile,
+  GeocodedAddress,
   ImportJob,
   NotificationEvent,
   Order,
   Plan,
+  PostalCodeLookup,
   Product,
   ProductCategory,
   ProductSubCategory,
   ProductSupplier,
+  RoutePlan,
+  RouteStop,
   StockItem,
   User,
   Vehicle,
@@ -33,7 +38,7 @@ export class ApiError extends Error {
   details: unknown
 
   constructor(status: number, details: unknown) {
-    super(typeof details === 'string' ? details : 'No se pudo completar la solicitud')
+    super(resolveApiMessage(details))
     this.status = status
     this.details = details
   }
@@ -78,6 +83,17 @@ export const api = {
     apiFetch<User>('/auth/register', { method: 'POST', body: payload }),
   registerDistributor: (payload: Record<string, unknown>) =>
     apiFetch<DistributorSignupResponse>('/auth/register-distributor', { method: 'POST', body: payload }),
+  lookupPostalCode: (postalCode: string) =>
+    apiFetch<PostalCodeLookup>(`/address/postal-code?postal_code=${encodeURIComponent(postalCode)}`),
+  geocodeAddress: (params: { street: string; number: string; locality: string; province: string }) =>
+    apiFetch<GeocodedAddress>(
+      `/address/geocode?${new URLSearchParams({
+        street: params.street,
+        number: params.number,
+        locality: params.locality,
+        province: params.province,
+      }).toString()}`,
+    ),
   me: () => apiFetch<User>('/auth/me'),
   plans: () => apiFetch<Plan[]>('/plans'),
   distributorOnboarding: () => apiFetch<DistributorOnboardingState>('/distributor-onboarding'),
@@ -99,12 +115,25 @@ export const api = {
   drivers: () => apiFetch<DriverProfile[]>('/drivers/'),
   orders: () => apiFetch<Order[]>('/orders/'),
   createOrder: (body: Record<string, unknown>) => apiFetch<Order>('/orders/', { method: 'POST', body }),
+  updateOrder: (id: number, body: Record<string, unknown>) => apiFetch<Order>(`/orders/${id}/`, { method: 'PATCH', body }),
   updateOrderStatus: (id: number, status: string) =>
     apiFetch<Order>(`/orders/${id}/status/`, { method: 'PATCH', body: { status } }),
   deliveries: () => apiFetch<Delivery[]>('/deliveries/'),
   delivery: (id: string | number) => apiFetch<Delivery>(`/deliveries/${id}/`),
   updateDeliveryLocation: (id: number, body: Record<string, unknown>) =>
     apiFetch<Delivery>(`/deliveries/${id}/location/`, { method: 'PATCH', body }),
+  routePlans: (dispatchDate?: string) => apiFetch<RoutePlan[]>(`/route-plans/${dispatchDate ? `?dispatch_date=${encodeURIComponent(dispatchDate)}` : ''}`),
+  routePlan: (id: number | string) => apiFetch<RoutePlan>(`/route-plans/${id}/`),
+  generateRoutePlan: (body: Record<string, unknown>) => apiFetch<RoutePlan>('/route-plans/generate/', { method: 'POST', body }),
+  editRoutePlan: (id: number, body: { runs: Array<{ id: number; stop_ids: number[] }> }) =>
+    apiFetch<RoutePlan>(`/route-plans/${id}/edit/`, { method: 'POST', body }),
+  deleteRoutePlan: (id: number) => apiFetch<void>(`/route-plans/${id}/`, { method: 'DELETE' }),
+  confirmRoutePlan: (id: number) => apiFetch<RoutePlan>(`/route-plans/${id}/confirm/`, { method: 'POST', body: {} }),
+  dispatchRoutePlan: (id: number) => apiFetch<RoutePlan>(`/route-plans/${id}/dispatch/`, { method: 'POST', body: {} }),
+  replanRoutePlan: (id: number) => apiFetch<RoutePlan>(`/route-plans/${id}/replan/`, { method: 'POST', body: {} }),
+  currentRoute: () => apiFetch<CurrentRoute | undefined>('/routes/me/current/'),
+  arriveRouteStop: (id: number) => apiFetch<RouteStop>(`/route-stops/${id}/arrive/`, { method: 'POST', body: {} }),
+  deliverRouteStop: (id: number) => apiFetch<RouteStop>(`/route-stops/${id}/deliver/`, { method: 'POST', body: {} }),
   notifications: () => apiFetch<NotificationEvent[]>('/notifications/'),
   vapidPublicKey: () => apiFetch<{ public_key: string }>('/push-subscriptions/vapid-public-key/'),
   savePushSubscription: (body: Record<string, unknown>) =>
@@ -174,4 +203,14 @@ export function setAuthTokens(access: string, refresh: string) {
 export function clearAuthTokens() {
   localStorage.removeItem('distromax_access')
   localStorage.removeItem('distromax_refresh')
+}
+
+function resolveApiMessage(details: unknown) {
+  if (typeof details === 'string' && details.trim()) return details
+  if (details && typeof details === 'object' && 'detail' in details) {
+    const detail = (details as { detail?: unknown }).detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    if (Array.isArray(detail) && typeof detail[0] === 'string' && detail[0].trim()) return detail[0]
+  }
+  return 'No se pudo completar la solicitud'
 }

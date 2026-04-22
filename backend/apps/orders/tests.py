@@ -61,7 +61,14 @@ class DistroMaxiFlowTests(TestCase):
             tax_id="20-1",
             contact_name="Compras",
             phone="222",
+            postal_code="1414",
             address="Cliente 1",
+            city="CABA",
+            province="CABA",
+            latitude=Decimal("-34.5841000"),
+            longitude=Decimal("-58.4351000"),
+            default_window_start="08:00",
+            default_window_end="14:00",
         )
         self.product = Product.objects.create(
             distributor=self.distributor,
@@ -69,6 +76,12 @@ class DistroMaxiFlowTests(TestCase):
             name="Agua x 6",
             category="Bebidas",
             unit="bulto",
+            weight=Decimal("8.000"),
+            weight_unit="kg",
+            length=Decimal("40.000"),
+            width=Decimal("30.000"),
+            height=Decimal("25.000"),
+            dimension_unit="cm",
             price=Decimal("100.00"),
             stock_minimum=Decimal("2.000"),
         )
@@ -112,6 +125,13 @@ class DistroMaxiFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         order_id = response.data["id"]
+        order = Order.objects.get(pk=order_id)
+        self.assertIsNotNone(order.dispatch_date)
+        self.assertEqual(str(order.delivery_window_start), "08:00:00")
+        self.assertEqual(str(order.delivery_window_end), "14:00:00")
+        item = order.items.get()
+        self.assertEqual(item.weight_kg, Decimal("24.000"))
+        self.assertEqual(item.volume_m3, Decimal("0.090000"))
         stock = StockItem.objects.get(product=self.product)
         self.assertEqual(stock.quantity, Decimal("10.000"))
         self.assertEqual(stock.reserved_quantity, Decimal("3.000"))
@@ -141,6 +161,22 @@ class DistroMaxiFlowTests(TestCase):
         self.assertEqual(product.discount_percent, Decimal("10.00"))
         self.assertEqual(product.discount_name, "Promo")
         self.assertEqual(product.characteristics, "Paquete mayorista")
+
+    def test_commerce_cannot_order_without_geolocated_address(self):
+        self.commerce.latitude = None
+        self.commerce.longitude = None
+        self.commerce.save(update_fields=["latitude", "longitude", "updated_at"])
+        self.client.force_authenticate(self.commerce_user)
+        response = self.client.post(
+            "/api/orders/",
+            {
+                "line_items": [{"product_id": self.product.id, "quantity": "1.000"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("delivery_address", response.data)
 
     def test_delivery_location_tracking(self):
         order = Order.objects.create(

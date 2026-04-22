@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'apps.billing',
     'apps.imports',
     'apps.dashboard',
+    'apps.routing',
 ]
 
 MIDDLEWARE = [
@@ -183,3 +184,6 @@ WEBPUSH_VAPID_PUBLIC_KEY = os.environ.get('WEBPUSH_VAPID_PUBLIC_KEY', '')
 WEBPUSH_VAPID_EMAIL = os.environ.get('WEBPUSH_VAPID_EMAIL', 'mailto:admin@distromax.local')
 MERCADO_PAGO_ACCESS_TOKEN = os.environ.get('MERCADO_PAGO_ACCESS_TOKEN', '')
 MERCADO_PAGO_WEBHOOK_SECRET = os.environ.get('MERCADO_PAGO_WEBHOOK_SECRET', '')
+OPENROUTESERVICE_API_KEY = os.environ.get('OPENROUTESERVICE_API_KEY', '')
+ROUTING_PROVIDER = os.environ.get('ROUTING_PROVIDER', 'ors')
+ROUTING_SERVICE_MINUTES_PER_STOP = int(os.environ.get('ROUTING_SERVICE_MINUTES_PER_STOP', '10'))

@@ -21,6 +21,7 @@ class Vehicle(models.Model):
     model = models.CharField(max_length=80, blank=True)
     year = models.PositiveIntegerField(null=True, blank=True)
     capacity_kg = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    capacity_m3 = models.DecimalField(max_digits=10, decimal_places=3, null=True, blank=True)
     status = models.CharField(max_length=20, choices=VehicleStatus.choices, default=VehicleStatus.AVAILABLE)
     insurance_expires_at = models.DateField(null=True, blank=True)
     inspection_expires_at = models.DateField(null=True, blank=True)

@@ -7,7 +7,7 @@ import { EmptyState } from './EmptyState'
 export type FieldConfig = {
   name: string
   label: string
-  type?: 'text' | 'number' | 'email' | 'date' | 'url' | 'textarea' | 'select' | 'checkbox'
+  type?: 'text' | 'number' | 'email' | 'date' | 'time' | 'url' | 'textarea' | 'select' | 'checkbox'
   required?: boolean
   options?: Array<{ value: string; label: string }>
   helperText?: string

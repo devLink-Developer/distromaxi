@@ -13,7 +13,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.select_related("commerce", "distributor").prefetch_related("items")
+        queryset = Order.objects.select_related("commerce", "distributor", "delivery").prefetch_related("items")
         user = self.request.user
         if user.role == "COMMERCE":
             return queryset.filter(commerce__user=user)

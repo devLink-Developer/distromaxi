@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { AddressEditor } from '../components/AddressEditor'
 import { EmptyState } from '../components/EmptyState'
 import { Icon } from '../components/Icon'
 import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
 import { useCartStore } from '../stores/cartStore'
 import { useOrderStore } from '../stores/orderStore'
-import type { Distributor, Order, Product } from '../types/domain'
+import type { Commerce, Distributor, Order, Product } from '../types/domain'
 
 export function HomePage() {
   return <DistributorsDirectory title="Elegi una distribuidora" />
@@ -269,19 +270,135 @@ export function CartPage() {
   )
 }
 
+export function CommerceAddressPage() {
+  const [commerce, setCommerce] = useState<Commerce | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  async function load() {
+    setLoading(true)
+    try {
+      const rows = await api.commerces()
+      setCommerce(rows[0] ?? null)
+      setError('')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No pudimos cargar tu direccion.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function saveAddress(value: {
+    postal_code: string
+    address: string
+    city: string
+    province: string
+    latitude: string | null
+    longitude: string | null
+    notes: string
+  }) {
+    if (!commerce) return
+    setSaving(true)
+    setMessage('')
+    setError('')
+    try {
+      const updated = await api.update<Commerce>('commerces', commerce.id, {
+        postal_code: value.postal_code,
+        address: value.address,
+        city: value.city,
+        province: value.province,
+        latitude: value.latitude,
+        longitude: value.longitude,
+        delivery_notes: value.notes,
+      })
+      setCommerce(updated)
+      setMessage('Direccion actualizada y geolocalizada.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'No se pudo guardar la direccion.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando direccion...</div>
+  }
+
+  if (!commerce) {
+    return <EmptyState title="No encontramos tu perfil comercial" text="Cuando tu cuenta tenga un comercio asociado, vas a poder cargar la direccion desde aca." />
+  }
+
+  return (
+    <section className="grid gap-5">
+      <div>
+        <p className="text-sm font-800 uppercase text-brand-700">Mi direccion</p>
+        <h1 className="mt-2 text-2xl font-800 text-slate-950">Direccion de entrega del cliente</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Antes de pedir, tu direccion debe quedar geolocalizada. Desde aca tambien ajustas indicaciones de entrega.</p>
+      </div>
+
+      <AddressEditor
+        title={commerce.address ? 'Editar direccion de entrega' : 'Cargar direccion de entrega'}
+        description="Usamos el codigo postal para traer opciones de localidad y despues validamos la calle con georreferenciacion antes de guardar."
+        notesLabel="Indicaciones adicionales"
+        saveLabel="Guardar direccion"
+        initialValue={{
+          postal_code: commerce.postal_code ?? '',
+          address: commerce.address ?? '',
+          city: commerce.city ?? '',
+          province: commerce.province ?? '',
+          latitude: commerce.latitude,
+          longitude: commerce.longitude,
+          notes: commerce.delivery_notes ?? '',
+        }}
+        saving={saving}
+        error={error}
+        message={message}
+        onSave={saveAddress}
+      />
+    </section>
+  )
+}
+
 export function CheckoutPage() {
   const items = useCartStore((state) => state.items)
   const clear = useCartStore((state) => state.clear)
   const createFromCart = useOrderStore((state) => state.createFromCart)
   const navigate = useNavigate()
+  const [commerce, setCommerce] = useState<Commerce | null>(null)
+  const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState('')
-  const [address, setAddress] = useState('Humboldt 1400, CABA')
+  const [dispatchDate, setDispatchDate] = useState(defaultDispatchDate())
+  const [windowStart, setWindowStart] = useState('')
+  const [windowEnd, setWindowEnd] = useState('')
   const distributor = items[0]?.product.distributor
 
+  useEffect(() => {
+    void api
+      .commerces()
+      .then((rows) => {
+        const current = rows[0] as Commerce | undefined
+        setCommerce(current ?? null)
+        if (!current) return
+        setWindowStart(current.default_window_start ?? '')
+        setWindowEnd(current.default_window_end ?? '')
+        setNotes(current.delivery_notes ?? '')
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
   async function submit() {
+    const hasWindow = Boolean(windowStart && windowEnd)
     const order = await createFromCart({
       distributor,
-      delivery_address: address,
+      dispatch_date: dispatchDate,
+      delivery_window_start: hasWindow ? windowStart : null,
+      delivery_window_end: hasWindow ? windowEnd : null,
       notes,
       line_items: items.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
     })
@@ -290,6 +407,25 @@ export function CheckoutPage() {
   }
 
   if (items.length === 0) return <EmptyState title="Carrito vacio" text="Suma productos de una distribuidora para continuar." />
+  if (loading) return <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando checkout...</div>
+  if (!commerce) return <EmptyState title="No encontramos tu direccion" text="Carga tu direccion antes de enviar pedidos." />
+  if (!commerce.latitude || !commerce.longitude) {
+    return (
+      <section className="grid gap-5">
+        <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-6 shadow-soft">
+          <p className="text-sm font-800 uppercase tracking-[0.14em] text-amber-900">Direccion pendiente</p>
+          <h1 className="mt-3 text-2xl font-800 text-amber-950">No puedes pedir hasta geolocalizar tu direccion.</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-amber-900">
+            Para que la distribuidora pueda rutear correctamente, primero debes guardar una direccion con coordenadas validas.
+          </p>
+          <Link className="mt-5 inline-flex min-h-11 items-center rounded-full bg-amber-900 px-5 text-sm font-800 text-white" to="/account/address">
+            Cargar direccion ahora
+          </Link>
+        </div>
+        <OrderSummary />
+      </section>
+    )
+  }
 
   return (
     <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
@@ -297,10 +433,28 @@ export function CheckoutPage() {
         <h1 className="text-2xl font-800 text-slate-950">Confirmar pedido</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">El pedido se envia a una sola distribuidora.</p>
         <div className="mt-5 grid gap-4">
+          <div className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950">
+            <p className="font-800">Direccion geolocalizada</p>
+            <p className="mt-1">{commerce.address}</p>
+            <p className="mt-1">{[commerce.city, commerce.province, commerce.postal_code].filter(Boolean).join(' · ')}</p>
+            <Link className="mt-3 inline-flex font-800 text-emerald-900" to="/account/address">
+              Editar direccion
+            </Link>
+          </div>
           <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Direccion de entrega
-            <input className="min-h-12 rounded-md border border-slate-300 px-3" value={address} onChange={(event) => setAddress(event.target.value)} />
+            Fecha de reparto
+            <input className="min-h-12 rounded-md border border-slate-300 px-3" type="date" value={dispatchDate} onChange={(event) => setDispatchDate(event.target.value)} required />
           </label>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Franja desde
+              <input className="min-h-12 rounded-md border border-slate-300 px-3" type="time" value={windowStart} onChange={(event) => setWindowStart(event.target.value)} />
+            </label>
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Franja hasta
+              <input className="min-h-12 rounded-md border border-slate-300 px-3" type="time" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)} />
+            </label>
+          </div>
           <label className="grid gap-1 text-sm font-700 text-slate-700">
             Notas
             <textarea className="min-h-28 rounded-md border border-slate-300 px-3 py-2" value={notes} onChange={(event) => setNotes(event.target.value)} />
@@ -419,6 +573,7 @@ function OrderRow({ order }: { order: Order }) {
       <p className="mt-3 text-sm text-slate-600">
         {order.items.length} productos · ${Number(order.total).toLocaleString('es-AR')}
       </p>
+      <p className="mt-1 text-sm text-slate-500">Reparto {new Date(`${order.dispatch_date}T00:00:00`).toLocaleDateString('es-AR')}</p>
       <Link className="mt-4 inline-flex min-h-11 items-center rounded-md border border-brand-200 px-4 font-800 text-brand-700" to={`/tracking/${order.id}`}>
         Ver seguimiento
       </Link>
@@ -433,4 +588,10 @@ function Info({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 font-800 text-slate-950">{value}</dd>
     </div>
   )
+}
+
+function defaultDispatchDate() {
+  const base = new Date()
+  base.setDate(base.getDate() + 1)
+  return base.toISOString().slice(0, 10)
 }

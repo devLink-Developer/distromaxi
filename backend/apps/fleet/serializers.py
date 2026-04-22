@@ -21,6 +21,7 @@ class VehicleSerializer(serializers.ModelSerializer):
             "model",
             "year",
             "capacity_kg",
+            "capacity_m3",
             "status",
             "insurance_expires_at",
             "inspection_expires_at",

@@ -81,6 +81,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class PostalCodeLookupSerializer(serializers.Serializer):
+    postal_code = serializers.CharField(max_length=16)
+
+
+class AddressGeocodeSerializer(serializers.Serializer):
+    street = serializers.CharField(max_length=180)
+    number = serializers.CharField(max_length=20)
+    locality = serializers.CharField(max_length=180)
+    province = serializers.CharField(max_length=180)
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = User.EMAIL_FIELD
 

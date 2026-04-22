@@ -10,8 +10,10 @@ import type { Product } from '../../types/domain'
 import { LoginPage, RegisterPage } from '../AuthPages'
 import { CartPage, CheckoutPage, DistributorCatalogPage, HomePage } from '../CommercePages'
 import { AdminSubscriptionsPage } from '../DashboardPages'
+import { DriverDeliveriesPage } from '../DriverPages'
 import { DistributorRegisterPage } from '../DistributorOnboardingPages'
 import { PlansPage } from '../PlansPage'
+import { DashboardRoutingPage } from '../RoutingPages'
 
 const inactiveDistributorAccess = {
   state: 'NONE' as const,
@@ -98,9 +100,11 @@ const distributor = {
   contact_name: 'Ventas',
   email: 'ventas@andina.local',
   phone: '111',
+  postal_code: '1414',
   address: 'Av. San Martin 2450',
   city: 'Buenos Aires',
   province: 'CABA',
+  address_notes: '',
   latitude: '-34.6037220',
   longitude: '-58.3815920',
   currency: 'ARS',
@@ -109,6 +113,79 @@ const distributor = {
   mercado_pago_link: '',
   can_operate: true,
   active: true,
+}
+
+const routePlan = {
+  id: 11,
+  distributor: 1,
+  distributor_name: 'Distribuidora Andina',
+  dispatch_date: '2026-04-22',
+  status: 'DRAFT',
+  provider: 'ors',
+  total_runs: 1,
+  total_orders: 1,
+  total_distance_km: '12.000',
+  total_duration_min: '40.00',
+  total_load_kg: '8.000',
+  total_load_m3: '0.300000',
+  unassigned_summary: [],
+  can_delete: true,
+  runs: [
+    {
+      id: 21,
+      sequence: 1,
+      status: 'CONFIRMED',
+      driver: 3,
+      driver_name: 'Marta Chofer',
+      vehicle: 4,
+      vehicle_plate: 'AB123CD',
+      total_stops: 1,
+      total_distance_km: '12.000',
+      total_duration_min: '40.00',
+      load_kg: '8.000',
+      load_m3: '0.300000',
+      stops: [
+        {
+          id: 31,
+          order: 10,
+          delivery_id: 91,
+          order_status: 'SCHEDULED',
+          commerce_name: 'Almacen Luna',
+          delivery_address: 'Humboldt 1400',
+          delivery_latitude: '-34.5841000',
+          delivery_longitude: '-58.4351000',
+          sequence: 1,
+          status: 'PENDING',
+          planned_eta: '2026-04-22T10:00:00.000Z',
+          window_start_at: '2026-04-22T08:00:00.000Z',
+          window_end_at: '2026-04-22T14:00:00.000Z',
+          leg_distance_km: '12.000',
+          leg_duration_min: '20.00',
+          demand_kg: '8.000',
+          demand_m3: '0.300000',
+        },
+      ],
+    },
+  ],
+  created_at: '2026-04-21T10:00:00.000Z',
+  updated_at: '2026-04-21T10:00:00.000Z',
+}
+
+const currentRoute = {
+  id: 21,
+  route_plan_id: 11,
+  route_plan_status: 'DISPATCHED',
+  sequence: 1,
+  status: 'DISPATCHED',
+  driver_name: 'Marta Chofer',
+  vehicle_plate: 'AB123CD',
+  total_stops: 1,
+  total_distance_km: '12.000',
+  total_duration_min: '40.00',
+  load_kg: '8.000',
+  load_m3: '0.300000',
+  active_stop_id: 31,
+  stops: routePlan.runs[0].stops,
 }
 
 function jsonResponse(data: unknown) {
@@ -552,8 +629,33 @@ describe('DistroMaxi frontend flows', () => {
 
   it('creates checkout orders with line items', async () => {
     useCartStore.getState().add(product, 1)
-    vi.mocked(fetch).mockReturnValue(
-      jsonResponse({
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/commerces/')) {
+        return jsonResponse([
+          {
+            id: 1,
+            distributor: 1,
+            distributor_name: 'Distribuidora Andina',
+            trade_name: 'Almacen Luna',
+            legal_name: '',
+            tax_id: '',
+            contact_name: 'Clara',
+            email: 'compras@luna.local',
+            phone: '111',
+            address: 'Humboldt 1400, CABA',
+            city: 'CABA',
+            province: 'CABA',
+            latitude: '-34.5841000',
+            longitude: '-58.4351000',
+            default_window_start: '08:00:00',
+            default_window_end: '14:00:00',
+            delivery_notes: '',
+            active: true,
+          },
+        ])
+      }
+      return jsonResponse({
         id: 10,
         commerce: 1,
         commerce_name: 'Almacen Luna',
@@ -561,12 +663,15 @@ describe('DistroMaxi frontend flows', () => {
         distributor_name: 'Distribuidora Andina',
         total: '3250.00',
         status: 'PENDING',
+        dispatch_date: '2026-04-22',
         delivery_address: 'Humboldt 1400, CABA',
+        delivery_window_start: '08:00:00',
+        delivery_window_end: '14:00:00',
         notes: '',
         items: [],
         created_at: new Date().toISOString(),
-      }),
-    )
+      })
+    })
 
     render(
       <MemoryRouter>
@@ -574,7 +679,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    await userEvent.click(screen.getByRole('button', { name: /enviar pedido/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /enviar pedido/i }))
 
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
@@ -582,5 +687,43 @@ describe('DistroMaxi frontend flows', () => {
         expect.objectContaining({ method: 'POST' }),
       )
     })
+  })
+
+  it('generates route drafts from the routing dashboard', async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/route-plans/generate/')) return jsonResponse(routePlan)
+      if (url.includes('/route-plans/')) return jsonResponse([])
+      return jsonResponse([])
+    })
+
+    render(
+      <MemoryRouter>
+        <DashboardRoutingPage />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: /generar rutas/i }))
+
+    expect(await screen.findByText(/rutas generadas/i)).toBeInTheDocument()
+    expect(await screen.findByText(/marta chofer/i)).toBeInTheDocument()
+  })
+
+  it('renders the driver current route instead of a flat deliveries list', async () => {
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/routes/me/current/')) return jsonResponse(currentRoute)
+      return jsonResponse(currentRoute)
+    })
+
+    render(
+      <MemoryRouter>
+        <DriverDeliveriesPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/mi ruta actual/i)).toBeInTheDocument()
+    expect(screen.getByText(/almacen luna/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /abrir navegacion/i }).length).toBeGreaterThan(0)
   })
 })

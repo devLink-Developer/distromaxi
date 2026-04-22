@@ -8,7 +8,6 @@ import {
   AdminUsersPage,
   BillingPage,
   CustomersManagerPage,
-  DashboardOrdersPage,
   DashboardPage,
   DistributorProfilePage,
   DriversManagerPage,
@@ -18,12 +17,14 @@ import {
   VehiclesManagerPage,
 } from '../pages/DashboardPages'
 import { DriverDeliveriesPage, DriverDeliveryDetailPage, TrackingPage } from '../pages/DriverPages'
+import { DashboardOrdersRoutingPage, DashboardRoutingPage } from '../pages/RoutingPages'
 import { DistributorOnboardingPage, DistributorRegisterPage } from '../pages/DistributorOnboardingPages'
 import { LoginPage, RegisterPage } from '../pages/AuthPages'
 import { LandingPage } from '../pages/LandingPage'
 import { PlansPage } from '../pages/PlansPage'
 import {
   CartPage,
+  CommerceAddressPage,
   CheckoutPage,
   DistributorCatalogPage,
   DistributorsPage,
@@ -64,6 +65,7 @@ export function App() {
           <Route path="/distributors/:id" element={<DistributorCatalogPage />} />
           <Route path="/products/:id" element={<ProductDetailPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/account/address" element={<CommerceAddressPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/orders" element={<OrdersPage />} />
           <Route path="/tracking/:orderId" element={<TrackingPage />} />
@@ -72,7 +74,8 @@ export function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/dashboard/products" element={<ProductsManagerPage />} />
             <Route path="/dashboard/stock" element={<StockPage />} />
-            <Route path="/dashboard/orders" element={<DashboardOrdersPage />} />
+            <Route path="/dashboard/orders" element={<DashboardOrdersRoutingPage />} />
+            <Route path="/dashboard/routing" element={<DashboardRoutingPage />} />
             <Route path="/dashboard/customers" element={<CustomersManagerPage />} />
             <Route path="/dashboard/profile" element={<DistributorProfilePage />} />
             <Route path="/dashboard/drivers" element={<DriversManagerPage />} />

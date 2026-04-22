@@ -114,9 +114,6 @@ export function DistributorRegisterPage() {
             />
           </label>
         </div>
-        <p className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-700 leading-6 text-emerald-900">
-          La direccion principal la completas mas adelante desde tu panel.
-        </p>
         {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
         <button
           className="min-h-12 rounded-full bg-brand-600 px-5 text-base font-800 text-white transition hover:bg-brand-700 disabled:opacity-60"
