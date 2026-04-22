@@ -3,25 +3,26 @@ import { useEffect, useState } from 'react'
 import { EmptyState } from '../components/EmptyState'
 import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import type { Order, RoutePlan } from '../types/domain'
 
 export function DashboardOrdersRoutingPage() {
   const [orders, setOrders] = useState<Order[]>([])
-  const [error, setError] = useState('')
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     void api
       .orders()
       .then(setOrders)
-      .catch((caught) => setError(caught instanceof Error ? caught.message : 'No se pudieron cargar los pedidos.'))
-  }, [])
+      .catch((caught) => showError(caught instanceof Error ? caught.message : 'No se pudieron cargar los pedidos.'))
+  }, [showError])
 
   async function saveSchedule(order: Order, payload: Partial<Order>) {
     try {
       const updated = await api.updateOrder(order.id, payload as Record<string, unknown>)
       setOrders((current) => current.map((item) => (item.id === updated.id ? updated : item)))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo guardar la programacion.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo guardar la programacion.')
     }
   }
 
@@ -30,7 +31,7 @@ export function DashboardOrdersRoutingPage() {
       const updated = await api.updateOrderStatus(order.id, status)
       setOrders((current) => current.map((item) => (item.id === updated.id ? updated : item)))
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo actualizar el estado.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo actualizar el estado.')
     }
   }
 
@@ -40,7 +41,6 @@ export function DashboardOrdersRoutingPage() {
         <h1 className="text-2xl font-800 text-slate-950">Gestion de pedidos</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">Ajusta fecha y franja antes de generar rutas. El ruteo toma estos datos como restriccion operativa.</p>
       </div>
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
       {orders.map((order) => (
         <article key={order.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
           <div className="flex flex-wrap justify-between gap-3">
@@ -108,17 +108,17 @@ export function DashboardRoutingPage() {
   const [generating, setGenerating] = useState(false)
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null)
   const [draftRuns, setDraftRuns] = useState<RoutePlan['runs']>([])
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
+  const confirm = useFeedbackStore((state) => state.confirm)
 
   async function load(date = dispatchDate) {
     setLoading(true)
     try {
       const plans = await api.routePlans(date)
       setRoutePlans(plans)
-      setError('')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudieron cargar las rutas.')
+      showError(caught instanceof Error ? caught.message : 'No se pudieron cargar las rutas.')
     } finally {
       setLoading(false)
     }
@@ -131,8 +131,6 @@ export function DashboardRoutingPage() {
   function startEditing(plan: RoutePlan) {
     setEditingPlanId(plan.id)
     setDraftRuns(cloneRuns(plan.runs))
-    setMessage('')
-    setError('')
   }
 
   function cancelEditing() {
@@ -177,22 +175,30 @@ export function DashboardRoutingPage() {
 
   async function generate() {
     setGenerating(true)
-    setMessage('')
-    setError('')
     try {
       const draft = await api.generateRoutePlan({ dispatch_date: dispatchDate })
       setRoutePlans((current) => [draft, ...current.filter((item) => item.id !== draft.id)])
-      setMessage('Rutas generadas.')
+      showSuccess('Rutas generadas.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo generar el borrador.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo generar el borrador.')
     } finally {
       setGenerating(false)
     }
   }
 
   async function runAction(action: 'confirm' | 'dispatch' | 'replan', planId: number) {
-    setMessage('')
-    setError('')
+    const confirmed = await confirm({
+      title: action === 'confirm' ? 'Confirmar borrador' : action === 'dispatch' ? 'Despachar ruta' : 'Replanificar ruta',
+      message:
+        action === 'confirm'
+          ? 'La ruta quedara asignada y lista para despacho.'
+          : action === 'dispatch'
+            ? 'El chofer vera esta secuencia como ruta activa.'
+            : 'Se generara una nueva propuesta para esta fecha.',
+      confirmLabel: action === 'confirm' ? 'Confirmar' : action === 'dispatch' ? 'Despachar' : 'Replanificar',
+      cancelLabel: 'Cancelar',
+    })
+    if (!confirmed) return
     try {
       const updated =
         action === 'confirm'
@@ -201,7 +207,7 @@ export function DashboardRoutingPage() {
             ? await api.dispatchRoutePlan(planId)
             : await api.replanRoutePlan(planId)
       setRoutePlans((current) => [updated, ...current.filter((item) => item.id !== planId && item.id !== updated.id)])
-      setMessage(
+      showSuccess(
         action === 'confirm'
           ? 'Borrador confirmado.'
           : action === 'dispatch'
@@ -210,13 +216,11 @@ export function DashboardRoutingPage() {
       )
       if (editingPlanId === planId) cancelEditing()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo completar la accion.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo completar la accion.')
     }
   }
 
   async function saveEdit(planId: number) {
-    setMessage('')
-    setError('')
     try {
       const updated = await api.editRoutePlan(planId, {
         runs: draftRuns.map((run) => ({
@@ -225,25 +229,29 @@ export function DashboardRoutingPage() {
         })),
       })
       setRoutePlans((current) => current.map((item) => (item.id === updated.id ? updated : item)))
-      setMessage('Ruta editada y recalculada.')
+      showSuccess('Ruta editada y recalculada.')
       cancelEditing()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo guardar la edicion.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo guardar la edicion.')
     }
   }
 
   async function deletePlan(planId: number) {
-    const confirmed = window.confirm('Eliminar esta ruta? Solo se puede borrar si no esta asignada a un chofer ni iniciada.')
+    const confirmed = await confirm({
+      title: 'Eliminar ruta',
+      message: 'Solo se puede borrar si no esta asignada a un chofer ni iniciada.',
+      confirmLabel: 'Eliminar',
+      cancelLabel: 'Cancelar',
+      tone: 'danger',
+    })
     if (!confirmed) return
-    setMessage('')
-    setError('')
     try {
       await api.deleteRoutePlan(planId)
       setRoutePlans((current) => current.filter((item) => item.id !== planId))
       if (editingPlanId === planId) cancelEditing()
-      setMessage('Ruta eliminada.')
+      showSuccess('Ruta eliminada.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo eliminar la ruta.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo eliminar la ruta.')
     }
   }
 
@@ -265,8 +273,6 @@ export function DashboardRoutingPage() {
         </div>
       </div>
 
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
-      {message && <p className="rounded-md bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">{message}</p>}
       {loading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando rutas...</div>
       ) : routePlans.length === 0 ? (

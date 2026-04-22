@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import { ApiError, api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import type { DistributorOnboardingState } from '../types/domain'
 import { defaultRouteForUser } from '../utils/authRouting'
 
@@ -21,8 +22,8 @@ export function DistributorRegisterPage() {
   const user = useAuthStore((state) => state.user)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     if (user) navigate(defaultRouteForUser(user), { replace: true })
@@ -30,7 +31,6 @@ export function DistributorRegisterPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     setLoading(true)
     const form = new FormData(event.currentTarget)
     const email = String(form.get('email') ?? '')
@@ -48,7 +48,7 @@ export function DistributorRegisterPage() {
       const chosenPlan = searchParams.get('plan')
       navigate(chosenPlan ? `/planes?plan=${encodeURIComponent(chosenPlan)}` : '/planes', { replace: true })
     } catch (caught) {
-      setError(errorMessage(caught, 'No pudimos crear la cuenta. Revisa los datos e intenta otra vez.'))
+      showError(errorMessage(caught, 'No pudimos crear la cuenta. Revisa los datos e intenta otra vez.'))
     } finally {
       setLoading(false)
     }
@@ -115,7 +115,6 @@ export function DistributorRegisterPage() {
             />
           </label>
         </div>
-        {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
         <button
           className="min-h-12 rounded-full bg-brand-600 px-5 text-base font-800 text-white transition hover:bg-brand-700 disabled:opacity-60"
           disabled={loading}
@@ -134,8 +133,8 @@ export function DistributorOnboardingPage() {
   const navigate = useNavigate()
   const [onboarding, setOnboarding] = useState<DistributorOnboardingState | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     let cancelled = false
@@ -144,10 +143,9 @@ export function DistributorOnboardingPage() {
         const data = await api.distributorOnboarding()
         if (!cancelled) {
           setOnboarding(data)
-          setError('')
         }
       } catch (caught) {
-        if (!cancelled) setError(errorMessage(caught, 'No pudimos cargar el estado de tu cuenta.'))
+        if (!cancelled) showError(errorMessage(caught, 'No pudimos cargar el estado de tu cuenta.'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -173,7 +171,6 @@ export function DistributorOnboardingPage() {
         .distributorOnboarding()
         .then((data) => {
           setOnboarding(data)
-          setError('')
         })
         .catch(() => undefined)
     }, 6000)
@@ -183,13 +180,12 @@ export function DistributorOnboardingPage() {
   async function reopenCheckout() {
     if (!onboarding?.selected_plan) return
     setCheckoutLoading(true)
-    setError('')
     try {
       const response = await api.selectDistributorPlan(onboarding.selected_plan.id)
       setOnboarding(response.onboarding)
       window.location.assign(response.checkout_url)
     } catch (caught) {
-      setError(errorMessage(caught, 'No pudimos volver a abrir el pago. Intenta nuevamente.'))
+      showError(errorMessage(caught, 'No pudimos volver a abrir el pago. Intenta nuevamente.'))
     } finally {
       setCheckoutLoading(false)
     }
@@ -247,7 +243,6 @@ export function DistributorOnboardingPage() {
       <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
         <div className="grid gap-5">
           <StatusPanel onboarding={onboarding} />
-          {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
           <article className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-soft">
             <p className="text-sm font-800 uppercase tracking-[0.18em] text-brand-700">Datos de tu cuenta</p>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">

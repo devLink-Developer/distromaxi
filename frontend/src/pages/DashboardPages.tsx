@@ -21,6 +21,7 @@ import { ResourceManager } from '../components/ResourceManager'
 import { StatusBadge } from '../components/StatusBadge'
 import { useDashboard } from '../hooks/useDashboard'
 import { api } from '../services/api'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import type {
   DashboardFilters,
   DashboardPoint,
@@ -41,6 +42,11 @@ export function DashboardPage() {
   const { filters, data, loading, error, setFilters, refresh } = useDashboard()
   const kpis = data?.summary.kpis
   const pipeline = data?.operations.pipeline ?? data?.summary.pipeline ?? []
+  const showError = useFeedbackStore((state) => state.error)
+
+  useEffect(() => {
+    if (error) showError(error)
+  }, [error, showError])
 
   return (
     <section className="grid gap-3 text-[12px] leading-5 text-slate-700">
@@ -75,8 +81,6 @@ export function DashboardPage() {
         </label>
         <FilterInput label="Zona" value={filters.zone} onChange={(value) => setFilters({ zone: value })} />
       </div>
-
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 font-800 text-red-700">{error}</p>}
       {loading && !data && <p className="rounded-lg border border-slate-200 bg-white p-4 font-800 text-slate-600">Cargando resumen...</p>}
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-7">
@@ -541,7 +545,8 @@ export function DashboardOrdersPage() {
 export function ImportsPage() {
   const [entity, setEntity] = useState('products')
   const [jobs, setJobs] = useState<ImportJob[]>([])
-  const [result, setResult] = useState('')
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     void api.list<ImportJob>('imports').then(setJobs)
@@ -550,9 +555,15 @@ export function ImportsPage() {
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) return
-    const job = await api.uploadImport(entity, file)
-    setJobs((current) => [job, ...current])
-    setResult(`Carga ${job.status}: ${job.processed_rows} registros procesados y ${job.error_rows} con error.`)
+    try {
+      const job = await api.uploadImport(entity, file)
+      setJobs((current) => [job, ...current])
+      showSuccess(`Carga ${job.status}: ${job.processed_rows} registros procesados y ${job.error_rows} con error.`)
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No se pudo cargar el archivo.')
+    } finally {
+      event.target.value = ''
+    }
   }
 
   return (
@@ -581,7 +592,6 @@ export function ImportsPage() {
             Descargar plantilla
           </a>
         </div>
-        {result && <p className="mt-4 rounded-md bg-brand-50 px-3 py-2 text-sm font-800 text-brand-700">{result}</p>}
       </div>
       <div className="grid gap-3">
         {jobs.map((job) => (
@@ -640,29 +650,28 @@ export function DistributorProfilePage() {
   const [loading, setLoading] = useState(true)
   const [savingContact, setSavingContact] = useState(false)
   const [savingAddress, setSavingAddress] = useState(false)
-  const [contactMessage, setContactMessage] = useState('')
-  const [contactError, setContactError] = useState('')
-  const [addressMessage, setAddressMessage] = useState('')
-  const [addressError, setAddressError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     void api
       .distributors()
       .then((rows) => {
         setProfile(rows[0] ?? null)
-        setContactError('')
-        setAddressError('')
+        setLoadFailed(false)
       })
-      .catch(() => setContactError('No pudimos cargar los datos de la distribuidora.'))
+      .catch(() => {
+        setLoadFailed(true)
+        showError('No pudimos cargar los datos de la distribuidora.')
+      })
       .finally(() => setLoading(false))
-  }, [])
+  }, [showError])
 
   async function submitContact(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!profile) return
     setSavingContact(true)
-    setContactMessage('')
-    setContactError('')
     const form = new FormData(event.currentTarget)
     try {
       const updated = await api.update<Distributor>('distributors', profile.id, {
@@ -671,9 +680,9 @@ export function DistributorProfilePage() {
         phone: form.get('phone'),
       })
       setProfile(updated)
-      setContactMessage('Datos operativos actualizados.')
+      showSuccess('Datos operativos actualizados.')
     } catch (caught) {
-      setContactError(caught instanceof Error ? caught.message : 'No se pudo guardar el perfil.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo guardar el perfil.')
     } finally {
       setSavingContact(false)
     }
@@ -690,8 +699,6 @@ export function DistributorProfilePage() {
   }) {
     if (!profile) return
     setSavingAddress(true)
-    setAddressMessage('')
-    setAddressError('')
     try {
       const updated = await api.update<Distributor>('distributors', profile.id, {
         postal_code: value.postal_code,
@@ -703,9 +710,9 @@ export function DistributorProfilePage() {
         longitude: value.longitude,
       })
       setProfile(updated)
-      setAddressMessage('Direccion principal actualizada.')
+      showSuccess('Direccion principal actualizada.')
     } catch (caught) {
-      setAddressError(caught instanceof Error ? caught.message : 'No se pudo guardar la direccion.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo guardar la direccion.')
     } finally {
       setSavingAddress(false)
     }
@@ -716,7 +723,11 @@ export function DistributorProfilePage() {
   }
 
   if (!profile) {
-    return <EmptyState title="Todavia no hay una distribuidora asociada" text="Cuando la cuenta quede lista, vas a ver aca los datos de tu distribuidora." />
+    return loadFailed ? (
+      <EmptyState title="No pudimos cargar la distribuidora" text="Intenta de nuevo en unos segundos." />
+    ) : (
+      <EmptyState title="Todavia no hay una distribuidora asociada" text="Cuando la cuenta quede lista, vas a ver aca los datos de tu distribuidora." />
+    )
   }
 
   return (
@@ -750,8 +761,6 @@ export function DistributorProfilePage() {
             <input className="min-h-11 rounded-md border border-slate-300 px-3" name="email" type="email" defaultValue={profile.email} required />
           </label>
         </div>
-        {contactError && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{contactError}</p>}
-        {contactMessage && <p className="rounded-md bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">{contactMessage}</p>}
         <div className="flex justify-end">
           <button className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:opacity-60" disabled={savingContact} type="submit">
             {savingContact ? 'Guardando...' : 'Guardar datos operativos'}
@@ -774,8 +783,8 @@ export function DistributorProfilePage() {
           notes: profile.address_notes ?? '',
         }}
         saving={savingAddress}
-        error={addressError}
-        message={addressMessage}
+        error=""
+        message=""
         onSave={saveAddress}
       />
     </section>

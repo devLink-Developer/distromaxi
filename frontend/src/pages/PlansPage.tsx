@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { BrandLogo } from '../components/BrandLogo'
+import { EmptyState } from '../components/EmptyState'
 import { ApiError, api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import type { Plan } from '../types/domain'
 
 const fallbackPlans: Plan[] = []
@@ -11,23 +13,22 @@ const fallbackPlans: Plan[] = []
 export function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>(fallbackPlans)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [checkoutPlanId, setCheckoutPlanId] = useState<number | null>(null)
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const selectedPlanName = searchParams.get('plan')
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     void api
       .plans()
       .then((data) => {
         setPlans(data)
-        setError('')
       })
-      .catch(() => setError('No pudimos cargar los planes. Prueba otra vez en unos minutos.'))
+      .catch(() => showError('No pudimos cargar los planes. Prueba otra vez en unos minutos.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [showError])
 
   const activePlans = useMemo(() => plans.filter((plan) => plan.is_active).sort((a, b) => a.sort_order - b.sort_order), [plans])
   const customersCount = 120
@@ -44,12 +45,11 @@ export function PlansPage() {
       return
     }
     setCheckoutPlanId(plan.id)
-    setError('')
     try {
       const response = await api.selectDistributorPlan(plan.id)
       window.location.assign(response.checkout_url)
     } catch (caught) {
-      setError(errorMessage(caught, 'No pudimos abrir el pago. Revisa el plan e intenta otra vez.'))
+      showError(errorMessage(caught, 'No pudimos abrir el pago. Revisa el plan e intenta otra vez.'))
     } finally {
       setCheckoutPlanId(null)
     }
@@ -128,14 +128,14 @@ export function PlansPage() {
           <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elegi el plan para tu distribuidora</h2>
           <p className="mt-3 text-base leading-7 text-slate-600">Podes mirar los planes sin registrarte. Para seguir al pago primero tenes que crear tu cuenta.</p>
         </div>
-
-        {error && <p className="rounded-md bg-red-50 px-4 py-3 text-sm font-800 text-red-700">{error}</p>}
         {loading ? (
           <div className="grid gap-4 md:grid-cols-3">
             {[0, 1, 2].map((item) => (
               <div key={item} className="h-80 animate-pulse rounded-lg border border-slate-200 bg-white" />
             ))}
           </div>
+        ) : activePlans.length === 0 ? (
+          <EmptyState title="No hay planes disponibles" text="Intenta nuevamente en unos minutos." />
         ) : (
           <div className="grid gap-4 md:grid-cols-3">
             {activePlans.map((plan) => (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { api } from '../services/api'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import { EmptyState } from './EmptyState'
 
 export type FieldConfig = {
@@ -46,7 +47,9 @@ export function ResourceManager({
   const [editing, setEditing] = useState<Row | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
+  const confirm = useFeedbackStore((state) => state.confirm)
 
   const initialValues = useMemo(
     () => Object.fromEntries(fields.map((field) => [field.name, editing ? (editing[field.name] ?? '') : (field.defaultValue ?? '')])),
@@ -55,12 +58,11 @@ export function ResourceManager({
 
   async function load() {
     setLoading(true)
-    setError('')
     try {
       const data = await api.list<Row>(endpoint)
       setRows(data)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos cargar la informacion.')
+      showError(caught instanceof Error ? caught.message : 'No pudimos cargar la informacion.')
     } finally {
       setLoading(false)
     }
@@ -72,25 +74,21 @@ export function ResourceManager({
 
   function openCreate() {
     setEditing(null)
-    setError('')
     setShowForm(true)
   }
 
   function openEdit(row: Row) {
     setEditing(row)
-    setError('')
     setShowForm(true)
   }
 
   function closeForm() {
     setShowForm(false)
     setEditing(null)
-    setError('')
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     const formElement = event.currentTarget
     const form = new FormData(formElement)
     const entries: Array<[string, FormDataEntryValue | boolean | null]> = []
@@ -118,17 +116,29 @@ export function ResourceManager({
       closeForm()
       await load()
       await onSaved?.()
+      showSuccess(editing ? 'Cambios guardados.' : 'Dato guardado.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos guardar los cambios.')
+      showError(caught instanceof Error ? caught.message : 'No pudimos guardar los cambios.')
     }
   }
 
   async function onDelete(row: Row) {
-    const confirmed = window.confirm('Eliminar este dato?')
+    const confirmed = await confirm({
+      title: 'Eliminar registro',
+      message: 'Esta accion elimina el dato cargado.',
+      confirmLabel: 'Eliminar',
+      cancelLabel: 'Cancelar',
+      tone: 'danger',
+    })
     if (!confirmed) return
-    await api.remove(endpoint, row.id)
-    await load()
-    await onSaved?.()
+    try {
+      await api.remove(endpoint, row.id)
+      await load()
+      await onSaved?.()
+      showSuccess('Dato eliminado.')
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No pudimos eliminar el dato.')
+    }
   }
 
   return (
@@ -148,9 +158,6 @@ export function ResourceManager({
           </button>
         )}
       </div>
-
-      {error && !showForm && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
-
       {loading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando informacion...</div>
       ) : rows.length === 0 ? (
@@ -228,7 +235,6 @@ export function ResourceManager({
                   <ResourceField key={`${field.name}-${String(initialValues[field.name])}`} field={field} value={initialValues[field.name]} />
                 ))}
               </div>
-              {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-700 text-red-700">{error}</p>}
               <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 pt-4">
                 <button
                   className="min-h-11 rounded-md border border-slate-300 px-4 text-sm font-800 text-slate-700"

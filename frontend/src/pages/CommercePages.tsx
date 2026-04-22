@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon'
 import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
 import { useCartStore } from '../stores/cartStore'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import { useOrderStore } from '../stores/orderStore'
 import type { Commerce, Distributor, Order, Product } from '../types/domain'
 
@@ -93,8 +94,8 @@ export function DistributorCatalogPage() {
   const [distributor, setDistributor] = useState<Distributor | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [query, setQuery] = useState('')
-  const [notice, setNotice] = useState('')
   const add = useCartStore((state) => state.add)
+  const showSuccess = useFeedbackStore((state) => state.success)
 
   useEffect(() => {
     if (!id) return
@@ -111,7 +112,7 @@ export function DistributorCatalogPage() {
 
   function addProduct(product: Product) {
     const result = add(product)
-    setNotice(result === 'replaced' ? `Empezaste un pedido con ${product.distributor_name}.` : `${product.name} se sumo al pedido.`)
+    showSuccess(result === 'replaced' ? `Empezaste un pedido con ${product.distributor_name}.` : `${product.name} se sumo al pedido.`)
   }
 
   return (
@@ -139,8 +140,6 @@ export function DistributorCatalogPage() {
         />
       </label>
 
-      {notice && <p className="rounded-md bg-mint-50 px-3 py-2 text-sm font-800 text-mint-700">{notice}</p>}
-
       {filtered.length === 0 ? (
         <EmptyState title="No encontramos productos" text="Proba con otra busqueda." />
       ) : (
@@ -157,8 +156,8 @@ export function DistributorCatalogPage() {
 export function ProductDetailPage() {
   const { id } = useParams()
   const [product, setProduct] = useState<Product | null>(null)
-  const [notice, setNotice] = useState('')
   const add = useCartStore((state) => state.add)
+  const showSuccess = useFeedbackStore((state) => state.success)
 
   useEffect(() => {
     if (id) void api.product(id).then(setProduct)
@@ -166,7 +165,7 @@ export function ProductDetailPage() {
 
   function addProduct(nextProduct: Product) {
     const result = add(nextProduct)
-    setNotice(result === 'replaced' ? `Empezaste un pedido con ${nextProduct.distributor_name}.` : `${nextProduct.name} se sumo al pedido.`)
+    showSuccess(result === 'replaced' ? `Empezaste un pedido con ${nextProduct.distributor_name}.` : `${nextProduct.name} se sumo al pedido.`)
   }
 
   if (!product) return <EmptyState title="Cargando producto" text="Estamos consultando stock y precio." />
@@ -199,7 +198,6 @@ export function ProductDetailPage() {
           <Info label="Descuento" value={product.discount_name ? `${product.discount_name} · ${Number(product.discount_percent).toLocaleString('es-AR')}%` : `${Number(product.discount_percent).toLocaleString('es-AR')}%`} />
           <Info label="Disponible" value={`${Number(product.stock_available).toLocaleString('es-AR')} ${product.unit}`} />
         </dl>
-        {notice && <p className="mt-4 rounded-md bg-mint-50 px-3 py-2 text-sm font-800 text-mint-700">{notice}</p>}
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-3xl font-800 text-slate-950">${Number(product.price).toLocaleString('es-AR')}</p>
           <button className="min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white" type="button" onClick={() => addProduct(product)}>
@@ -274,17 +272,19 @@ export function CommerceAddressPage() {
   const [commerce, setCommerce] = useState<Commerce | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
+  const [loadFailed, setLoadFailed] = useState(false)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   async function load() {
     setLoading(true)
     try {
       const rows = await api.commerces()
       setCommerce(rows[0] ?? null)
-      setError('')
+      setLoadFailed(false)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No pudimos cargar tu direccion.')
+      setLoadFailed(true)
+      showError(caught instanceof Error ? caught.message : 'No pudimos cargar tu direccion.')
     } finally {
       setLoading(false)
     }
@@ -305,8 +305,6 @@ export function CommerceAddressPage() {
   }) {
     if (!commerce) return
     setSaving(true)
-    setMessage('')
-    setError('')
     try {
       const updated = await api.update<Commerce>('commerces', commerce.id, {
         postal_code: value.postal_code,
@@ -318,9 +316,9 @@ export function CommerceAddressPage() {
         delivery_notes: value.notes,
       })
       setCommerce(updated)
-      setMessage('Direccion actualizada y geolocalizada.')
+      showSuccess('Direccion actualizada y geolocalizada.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se pudo guardar la direccion.')
+      showError(caught instanceof Error ? caught.message : 'No se pudo guardar la direccion.')
     } finally {
       setSaving(false)
     }
@@ -331,7 +329,11 @@ export function CommerceAddressPage() {
   }
 
   if (!commerce) {
-    return <EmptyState title="No encontramos tu perfil comercial" text="Cuando tu cuenta tenga un comercio asociado, vas a poder cargar la direccion desde aca." />
+    return loadFailed ? (
+      <EmptyState title="No pudimos cargar tu direccion" text="Intenta de nuevo en unos segundos." />
+    ) : (
+      <EmptyState title="No encontramos tu perfil comercial" text="Cuando tu cuenta tenga un comercio asociado, vas a poder cargar la direccion desde aca." />
+    )
   }
 
   return (
@@ -357,8 +359,8 @@ export function CommerceAddressPage() {
           notes: commerce.delivery_notes ?? '',
         }}
         saving={saving}
-        error={error}
-        message={message}
+        error=""
+        message=""
         onSave={saveAddress}
       />
     </section>

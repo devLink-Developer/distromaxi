@@ -2,10 +2,13 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 
 import { App } from '../../app/App'
+import { FeedbackLayer } from '../../components/FeedbackLayer'
 import { useAuthStore } from '../../stores/authStore'
 import { useCartStore } from '../../stores/cartStore'
+import { useFeedbackStore } from '../../stores/feedbackStore'
 import type { Product } from '../../types/domain'
 import { LoginPage, RegisterPage } from '../AuthPages'
 import { CartPage, CheckoutPage, DistributorCatalogPage, HomePage } from '../CommercePages'
@@ -201,6 +204,7 @@ describe('DistroMaxi frontend flows', () => {
     localStorage.clear()
     useCartStore.setState({ items: [] })
     useAuthStore.setState({ user: null, token: null, loading: false })
+    useFeedbackStore.setState({ toasts: [], confirmDialog: null })
     vi.stubGlobal('fetch', vi.fn())
   })
 
@@ -225,7 +229,7 @@ describe('DistroMaxi frontend flows', () => {
       }),
     )
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <LoginPage />
       </MemoryRouter>,
@@ -251,7 +255,7 @@ describe('DistroMaxi frontend flows', () => {
       }),
     )
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <RegisterPage />
       </MemoryRouter>,
@@ -342,7 +346,7 @@ describe('DistroMaxi frontend flows', () => {
       return jsonResponse({})
     })
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <DistributorRegisterPage />
       </MemoryRouter>,
@@ -366,7 +370,7 @@ describe('DistroMaxi frontend flows', () => {
   it('renders distributors before products', async () => {
     vi.mocked(fetch).mockReturnValue(jsonResponse([distributor]))
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <HomePage />
       </MemoryRouter>,
@@ -406,7 +410,7 @@ describe('DistroMaxi frontend flows', () => {
       ]),
     )
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <PlansPage />
       </MemoryRouter>,
@@ -490,7 +494,7 @@ describe('DistroMaxi frontend flows', () => {
       return jsonResponse([])
     })
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <PlansPage />
       </MemoryRouter>,
@@ -551,7 +555,7 @@ describe('DistroMaxi frontend flows', () => {
       return jsonResponse([])
     })
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <AdminSubscriptionsPage />
       </MemoryRouter>,
@@ -594,7 +598,7 @@ describe('DistroMaxi frontend flows', () => {
   it('renders products inside a distributor catalog', async () => {
     vi.mocked(fetch).mockReturnValueOnce(jsonResponse(distributor)).mockReturnValueOnce(jsonResponse([product]))
 
-    render(
+    renderWithFeedback(
       <MemoryRouter initialEntries={['/distributors/1']}>
         <Routes>
           <Route path="/distributors/:id" element={<DistributorCatalogPage />} />
@@ -609,7 +613,7 @@ describe('DistroMaxi frontend flows', () => {
   it('calculates cart totals', () => {
     useCartStore.getState().add(product, 2)
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <CartPage />
       </MemoryRouter>,
@@ -673,7 +677,7 @@ describe('DistroMaxi frontend flows', () => {
       })
     })
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <CheckoutPage />
       </MemoryRouter>,
@@ -697,7 +701,7 @@ describe('DistroMaxi frontend flows', () => {
       return jsonResponse([])
     })
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <DashboardRoutingPage />
       </MemoryRouter>,
@@ -716,7 +720,7 @@ describe('DistroMaxi frontend flows', () => {
       return jsonResponse(currentRoute)
     })
 
-    render(
+    renderWithFeedback(
       <MemoryRouter>
         <DriverDeliveriesPage />
       </MemoryRouter>,
@@ -727,3 +731,12 @@ describe('DistroMaxi frontend flows', () => {
     expect(screen.getAllByRole('button', { name: /abrir navegacion/i }).length).toBeGreaterThan(0)
   })
 })
+
+function renderWithFeedback(ui: ReactNode) {
+  return render(
+    <>
+      {ui}
+      <FeedbackLayer />
+    </>,
+  )
+}

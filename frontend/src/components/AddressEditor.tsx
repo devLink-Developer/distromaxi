@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 
 import { AddressMap } from './AddressMap'
 import { api } from '../services/api'
+import { useFeedbackStore } from '../stores/feedbackStore'
 
 export type AddressEditorValue = {
   postal_code: string
@@ -61,6 +62,8 @@ export function AddressEditor({
   const [geocodeStatus, setGeocodeStatus] = useState<GeocodeStatus>(initialValue.latitude && initialValue.longitude ? 'ready' : 'idle')
   const geocodeRequestRef = useRef(0)
   const reverseRequestRef = useRef(0)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     const currentSplit = splitAddress(initialValue.address)
@@ -87,6 +90,18 @@ export function AddressEditor({
     )
     setGeocodeStatus(currentMapPosition ? 'ready' : 'idle')
   }, [initialValue.address, initialValue.city, initialValue.latitude, initialValue.longitude, initialValue.notes, initialValue.postal_code, initialValue.province])
+
+  useEffect(() => {
+    if (localError) showError(localError)
+  }, [localError, showError])
+
+  useEffect(() => {
+    if (error) showError(error)
+  }, [error, showError])
+
+  useEffect(() => {
+    if (message) showSuccess(message)
+  }, [message, showSuccess])
 
   function markAddressDirty() {
     setLatitude(null)
@@ -381,10 +396,6 @@ export function AddressEditor({
               />
             </label>
           </SectionCard>
-
-          {localError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{localError}</p>}
-          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
-          {message && <p className="rounded-xl bg-brand-50 px-4 py-3 text-sm font-700 text-brand-700">{message}</p>}
 
           <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
             <div className="grid gap-1">

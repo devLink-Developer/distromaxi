@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom'
 import { EmptyState } from '../components/EmptyState'
 import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import { useTrackingStore } from '../stores/trackingStore'
 import type { CurrentRoute, Delivery } from '../types/domain'
 
@@ -11,7 +12,9 @@ export function DriverDeliveriesPage() {
   const sendLocation = useTrackingStore((state) => state.sendLocation)
   const [route, setRoute] = useState<CurrentRoute | null>(null)
   const [loading, setLoading] = useState(true)
-  const [message, setMessage] = useState('')
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
+  const showInfo = useFeedbackStore((state) => state.info)
 
   async function load() {
     setLoading(true)
@@ -42,26 +45,38 @@ export function DriverDeliveriesPage() {
 
   function shareLocation() {
     if (!activeStop?.delivery_id || !navigator.geolocation) {
-      setMessage('No hay una entrega activa con tracking disponible.')
+      showInfo('No hay una entrega activa con tracking disponible.')
       return
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        void sendLocation(activeStop.delivery_id as number, position).then(() => setMessage('Ubicacion enviada.'))
+        void sendLocation(activeStop.delivery_id as number, position)
+          .then(() => showSuccess('Ubicacion enviada.'))
+          .catch(() => showError('No se pudo enviar la ubicacion.'))
       },
-      () => setMessage('No se pudo obtener la ubicacion. Revisa los permisos del navegador.'),
+      () => showError('No se pudo obtener la ubicacion. Revisa los permisos del navegador.'),
       { enableHighAccuracy: true, timeout: 10000 },
     )
   }
 
   async function markArrived(stopId: number) {
-    await api.arriveRouteStop(stopId)
-    await load()
+    try {
+      await api.arriveRouteStop(stopId)
+      await load()
+      showSuccess('Arribo registrado.')
+    } catch {
+      showError('No se pudo registrar el arribo.')
+    }
   }
 
   async function markDelivered(stopId: number) {
-    await api.deliverRouteStop(stopId)
-    await load()
+    try {
+      await api.deliverRouteStop(stopId)
+      await load()
+      showSuccess('Entrega registrada.')
+    } catch {
+      showError('No se pudo registrar la entrega.')
+    }
   }
 
   if (loading) return <EmptyState title="Cargando ruta" text="Consultando la hoja de ruta del dia." />
@@ -90,7 +105,6 @@ export function DriverDeliveriesPage() {
             Actualizar
           </button>
         </div>
-        {message && <p className="mt-3 rounded-md bg-brand-50 px-3 py-2 text-sm font-800 text-brand-700">{message}</p>}
       </div>
 
       <div className="grid gap-4">

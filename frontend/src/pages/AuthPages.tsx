@@ -5,26 +5,26 @@ import { Link, useNavigate } from 'react-router-dom'
 import { BrandLogo } from '../components/BrandLogo'
 import { ApiError } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
+import { useFeedbackStore } from '../stores/feedbackStore'
 import { defaultRouteForUser } from '../utils/authRouting'
 
 const publicHeroImage = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=80'
 
 export function LoginPage() {
   const login = useAuthStore((state) => state.login)
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const showError = useFeedbackStore((state) => state.error)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
     setLoading(true)
     const form = new FormData(event.currentTarget)
     try {
       const user = await login(String(form.get('email')), String(form.get('password')))
       navigate(defaultRouteForUser(user))
     } catch (caught) {
-      setError(errorMessage(caught, 'Email o contrasena invalidos.'))
+      showError(errorMessage(caught, 'Email o contrasena invalidos.'))
     } finally {
       setLoading(false)
     }
@@ -59,7 +59,6 @@ export function LoginPage() {
             required
           />
         </label>
-        {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
         <button
           className="min-h-12 rounded-full bg-slate-950 px-5 text-base font-800 text-white transition hover:bg-slate-800 disabled:opacity-60"
           disabled={loading}
@@ -88,14 +87,12 @@ export function LoginPage() {
 
 export function RegisterPage() {
   const register = useAuthStore((state) => state.register)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setError('')
-    setMessage('')
     setLoading(true)
     const form = new FormData(event.currentTarget)
     try {
@@ -106,10 +103,10 @@ export function RegisterPage() {
         phone: form.get('phone'),
         password: form.get('password'),
       })
-      setMessage('Cuenta de cliente creada. Ya podes ingresar.')
+      showSuccess('Cuenta de cliente creada. Ya podes ingresar.')
       event.currentTarget.reset()
     } catch (caught) {
-      setError(errorMessage(caught, 'No se pudo crear la cuenta. Revisa los datos e intenta otra vez.'))
+      showError(errorMessage(caught, 'No se pudo crear la cuenta. Revisa los datos e intenta otra vez.'))
     } finally {
       setLoading(false)
     }
@@ -152,8 +149,6 @@ export function RegisterPage() {
         <p className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-700 leading-6 text-emerald-900">
           La direccion la completas despues desde tu cuenta.
         </p>
-        {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-700 text-red-700">{error}</p>}
-        {message && <p className="rounded-2xl bg-mint-50 px-4 py-3 text-sm font-700 text-mint-700">{message}</p>}
         <button
           className="min-h-12 rounded-full bg-brand-600 px-5 text-base font-800 text-white transition hover:bg-brand-700 disabled:opacity-60"
           disabled={loading}
