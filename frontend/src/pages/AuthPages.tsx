@@ -179,25 +179,27 @@ function AuthShell({ badge, title, text, children }: { badge: string; title: str
       <div className="absolute inset-0 bg-emerald-950/70" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(52,211,153,0.18),_transparent_34%),linear-gradient(180deg,rgba(2,44,34,0.16)_0%,rgba(2,44,34,0.4)_100%)]" />
 
-      <div className="relative z-10 mx-auto flex min-h-dvh max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <nav className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-          <BrandLogo className="justify-start" dark to="/" />
+      <nav className="relative z-10 border-b border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-7xl gap-3 px-4 py-4 sm:px-6 lg:flex lg:items-center lg:justify-between lg:px-8">
+          <BrandLogo className="justify-start" dark size="nav" to="/" />
           <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
             <Link
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-800 text-slate-800 transition hover:bg-slate-200 hover:text-slate-950 sm:rounded-md"
               to="/"
             >
               Ir al inicio
             </Link>
             <Link
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-800 text-slate-800 transition hover:bg-slate-200 hover:text-slate-950 sm:rounded-md"
               to="/planes"
             >
               Soy distribuidora
             </Link>
           </div>
-        </nav>
+        </div>
+      </nav>
 
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-4.75rem)] max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <section className="mt-6 grid flex-1 gap-8 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-10">
           <div className="hidden max-w-2xl lg:grid lg:gap-5">
             <div>

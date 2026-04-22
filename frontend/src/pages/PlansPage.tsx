@@ -64,24 +64,24 @@ export function PlansPage() {
           alt="Centro de distribucion con pedidos listos para despacho"
         />
         <div className="absolute inset-0 bg-emerald-950/70" />
-        <nav className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
-          <div className="grid gap-3 rounded-[1.5rem] border border-white/15 bg-slate-950/20 p-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-between sm:rounded-none sm:border-none sm:bg-transparent sm:p-0 sm:backdrop-blur-0">
-            <BrandLogo className="justify-start" dark to="/" />
+        <nav className="relative z-10 border-b border-slate-200 bg-white">
+          <div className="mx-auto grid max-w-7xl gap-3 px-4 py-4 sm:px-6 lg:flex lg:items-center lg:justify-between lg:px-8">
+            <BrandLogo className="justify-start" dark size="nav" to="/" />
             <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2">
               <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-800 text-slate-800 transition hover:bg-slate-200 hover:text-slate-950 sm:rounded-md"
                 to="/"
               >
                 Soy cliente
               </Link>
               <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-800 text-white transition hover:bg-white/15 sm:rounded-md sm:border-transparent sm:bg-transparent sm:px-3"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-800 text-slate-800 transition hover:bg-slate-200 hover:text-slate-950 sm:rounded-md"
                 to="/login"
               >
                 Ingresar
               </Link>
               <Link
-                className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 text-sm font-800 text-emerald-950 transition hover:bg-emerald-50 sm:col-span-1 sm:rounded-md"
+                className="col-span-2 inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-950 px-4 text-sm font-800 text-white transition hover:bg-emerald-900 sm:col-span-1 sm:rounded-md"
                 to="/register"
               >
                 Alta clientes

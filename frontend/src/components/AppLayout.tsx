@@ -101,9 +101,7 @@ export function AppLayout() {
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <BrandLogo className={compact ? '' : 'rounded-[1.25rem] border border-slate-200 bg-slate-50 px-3 py-2'} compact={compact} />
-  )
+  return <BrandLogo className={compact ? '' : 'rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3'} size={compact ? 'compact' : 'sidebar'} />
 }
 
 function NavItem({
