@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import {
   Bar,
@@ -17,7 +17,7 @@ import {
 
 import { AddressEditor } from '../components/AddressEditor'
 import { EmptyState } from '../components/EmptyState'
-import { ResourceManager } from '../components/ResourceManager'
+import { ResourceManager, type FieldConfig, type ResourceRow } from '../components/ResourceManager'
 import { StatusBadge } from '../components/StatusBadge'
 import { useDashboard } from '../hooks/useDashboard'
 import { api } from '../services/api'
@@ -37,6 +37,65 @@ import type {
 
 type ExportModule = 'sales' | 'customers' | 'products' | 'operations'
 type CompactColumn = [key: string, label: string, formatter?: (value: unknown) => string]
+type SelectOption = { value: string; label: string }
+type ActiveCatalogItem = { id: number; name: string; active: boolean }
+
+const resourceManagerDensityClass = [
+  'min-w-0',
+  '[&>section]:gap-3',
+  '[&_h1]:text-xl',
+  '[&_h1]:leading-7',
+  '[&_p]:text-[13px]',
+  '[&_p]:leading-5',
+  '[&_table]:text-[13px]',
+  '[&_thead]:text-[11px]',
+  '[&_th]:whitespace-nowrap',
+  '[&_th]:px-3',
+  '[&_th]:py-2',
+  '[&_td]:max-w-[14rem]',
+  '[&_td]:truncate',
+  '[&_td]:px-3',
+  '[&_td]:py-2',
+  '[&_td]:align-top',
+  '[&_article]:p-3',
+].join(' ')
+
+const productQuickFilters = [
+  { id: 'active', label: 'Activos', predicate: (row: ResourceRow) => row.active !== false },
+  { id: 'inactive', label: 'Inactivos', predicate: (row: ResourceRow) => row.active === false },
+  { id: 'no-stock', label: 'Sin stock', predicate: (row: ResourceRow) => asNumber(row.stock_available) <= 0 },
+  { id: 'low-stock', label: 'Bajo stock', predicate: (row: ResourceRow) => Boolean(row.low_stock) },
+  { id: 'no-image', label: 'Sin imagen', predicate: (row: ResourceRow) => !String(row.image_url ?? '').trim() },
+  { id: 'discount', label: 'Con descuento', predicate: (row: ResourceRow) => asNumber(row.discount_percent) > 0 },
+]
+
+const productFormSections = [
+  {
+    title: 'Identidad',
+    description: 'Datos visibles para encontrar el producto y evitar SKU duplicados.',
+    fields: ['sku', 'name', 'brand', 'barcode', 'active'],
+  },
+  {
+    title: 'Clasificacion',
+    description: 'Proveedor, categoria y subcategoria usados por la tienda y los filtros.',
+    fields: ['supplier', 'product_category', 'product_subcategory', 'unit', 'package_size'],
+  },
+  {
+    title: 'Comercial',
+    description: 'Precio, costo y descuento vigente para venta mayorista.',
+    fields: ['price', 'cost', 'discount_percent', 'discount_name', 'stock_minimum'],
+  },
+  {
+    title: 'Logistica',
+    description: 'Medidas necesarias para stock, bultos, palletizado y ruteo.',
+    fields: ['units_per_package', 'packages_per_pallet', 'units_per_pallet', 'length', 'width', 'height', 'dimension_unit', 'weight', 'weight_unit'],
+  },
+  {
+    title: 'Contenido',
+    description: 'Informacion que mejora la lectura del catalogo por parte del cliente.',
+    fields: ['image_url', 'characteristics', 'description'],
+  },
+]
 
 export function DashboardPage() {
   const { filters, data, loading, error, setFilters, refresh } = useDashboard()
@@ -231,151 +290,330 @@ export function ProductsManagerPage() {
   const [suppliers, setSuppliers] = useState<ProductSupplier[]>([])
   const [categories, setCategories] = useState<ProductCategory[]>([])
   const [subcategories, setSubcategories] = useState<ProductSubCategory[]>([])
+  const [optionsLoading, setOptionsLoading] = useState(true)
 
   async function refreshOptions() {
-    const [nextSuppliers, nextCategories, nextSubcategories] = await Promise.all([
-      api.productSuppliers(),
-      api.productCategories(),
-      api.productSubCategories(),
-    ])
-    setSuppliers(nextSuppliers)
-    setCategories(nextCategories)
-    setSubcategories(nextSubcategories)
+    setOptionsLoading(true)
+    try {
+      const [nextSuppliers, nextCategories, nextSubcategories] = await Promise.all([
+        api.productSuppliers(),
+        api.productCategories(),
+        api.productSubCategories(),
+      ])
+      setSuppliers(nextSuppliers)
+      setCategories(nextCategories)
+      setSubcategories(nextSubcategories)
+    } finally {
+      setOptionsLoading(false)
+    }
   }
 
   useEffect(() => {
     void refreshOptions()
   }, [])
 
-  const supplierOptions = suppliers.filter((item) => item.active).map((item) => ({ value: String(item.id), label: item.name }))
-  const categoryOptions = categories.filter((item) => item.active).map((item) => ({ value: String(item.id), label: item.name }))
-  const subcategoryOptions = subcategories
-    .filter((item) => item.active)
-    .map((item) => ({ value: String(item.id), label: `${item.category_name} / ${item.name}` }))
+  const supplierOptions = useMemo(() => activeOptions(suppliers), [suppliers])
+  const categoryOptions = useMemo(() => activeOptions(categories), [categories])
+  const subcategoryOptions = useMemo(() => activeSubcategoryOptions(subcategories), [subcategories])
+  const productFields = useMemo(
+    () => productManagerFields(supplierOptions, categoryOptions, subcategoryOptions),
+    [categoryOptions, subcategoryOptions, supplierOptions],
+  )
+  const needsSuppliers = !optionsLoading && supplierOptions.length === 0
+  const needsCategories = !optionsLoading && categoryOptions.length === 0
+  const activeReferences = activeCount(suppliers) + activeCount(categories) + activeCount(subcategories)
+  const totalReferences = suppliers.length + categories.length + subcategories.length
 
   return (
-    <section className="grid gap-8">
-      <ResourceManager
-        title="Productos"
-        description="Administra tu catalogo de venta, la presentacion y los datos del producto."
-        endpoint="products"
-        fields={[
-          { name: 'sku', label: 'Codigo', required: true },
-          { name: 'barcode', label: 'Codigo de barras' },
-          { name: 'name', label: 'Nombre', required: true },
-          { name: 'brand', label: 'Marca' },
-          { name: 'supplier', label: 'Proveedor', type: 'select', required: true, options: supplierOptions },
-          { name: 'product_category', label: 'Categoria', type: 'select', required: true, options: categoryOptions },
-          { name: 'product_subcategory', label: 'Sub categoria', type: 'select', options: subcategoryOptions },
-          { name: 'unit', label: 'Unidad de medida', required: true },
-          { name: 'package_size', label: 'Presentacion' },
-          { name: 'length', label: 'Largo', type: 'number', required: true },
-          { name: 'width', label: 'Ancho', type: 'number', required: true },
-          { name: 'height', label: 'Alto', type: 'number', required: true },
-          {
-            name: 'dimension_unit',
-            label: 'Unidad largo/ancho/alto',
-            type: 'select',
-            required: true,
-            defaultValue: 'cm',
-            options: [
-              { value: 'cm', label: 'cm' },
-              { value: 'm', label: 'm' },
-              { value: 'mm', label: 'mm' },
-            ],
-          },
-          { name: 'weight', label: 'Peso', type: 'number', required: true },
-          {
-            name: 'weight_unit',
-            label: 'Unidad de peso',
-            type: 'select',
-            required: true,
-            defaultValue: 'kg',
-            options: [
-              { value: 'kg', label: 'kg' },
-              { value: 'g', label: 'g' },
-            ],
-          },
-          { name: 'units_per_package', label: 'Unidades por bulto', type: 'number', required: true, defaultValue: 1 },
-          { name: 'packages_per_pallet', label: 'Bultos por pallet', type: 'number' },
-          { name: 'units_per_pallet', label: 'Unidades por pallet', type: 'number' },
-          { name: 'price', label: 'Precio', type: 'number', required: true },
-          { name: 'cost', label: 'Costo', type: 'number' },
-          { name: 'discount_percent', label: 'Porc. descuento', type: 'number', defaultValue: 0 },
-          { name: 'discount_name', label: 'Nombre descuento' },
-          { name: 'stock_minimum', label: 'Stock minimo', type: 'number' },
-          { name: 'image_url', label: 'URL de imagen' },
-          { name: 'characteristics', label: 'Caracteristicas', type: 'textarea' },
-          { name: 'description', label: 'Descripcion', type: 'textarea' },
-        ]}
-        columns={[
-          { key: 'sku', label: 'Codigo' },
-          { key: 'name', label: 'Producto' },
-          { key: 'supplier_name', label: 'Proveedor' },
-          { key: 'category', label: 'Categoria' },
-          { key: 'subcategory', label: 'Sub categoria' },
-          { key: 'price', label: 'Precio' },
-          { key: 'cost', label: 'Costo' },
-          { key: 'discount_percent', label: 'Desc. %' },
-          { key: 'stock_available', label: 'Disponible' },
-        ]}
-      />
+    <section className="grid gap-4 text-sm text-slate-700">
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-[11px] font-800 uppercase text-brand-700">Catalogo</p>
+          <h1 className="mt-1 text-2xl font-800 text-slate-950">Productos de distribuidora</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Carga articulos, precios y medidas con los datos auxiliares visibles en la misma pantalla.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:min-w-[34rem]">
+          <CatalogStat label="Proveedores" value={optionsLoading ? '...' : activeTotal(suppliers)} />
+          <CatalogStat label="Categorias" value={optionsLoading ? '...' : activeTotal(categories)} />
+          <CatalogStat label="Sub categorias" value={optionsLoading ? '...' : activeTotal(subcategories)} />
+        </div>
+      </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <CatalogSetupNotice needsSuppliers={needsSuppliers} needsCategories={needsCategories} />
+
+      <div className={resourceManagerDensityClass}>
         <ResourceManager
-          title="Proveedores"
-          description="Configura proveedores para asociarlos a tus articulos."
-          endpoint="product-suppliers"
-          createLabel="Agregar proveedor"
-          onSaved={refreshOptions}
-          fields={[
-            { name: 'name', label: 'Nombre', required: true },
-            { name: 'contact_name', label: 'Contacto' },
-            { name: 'phone', label: 'Telefono' },
-            { name: 'email', label: 'Email', type: 'email' },
-            { name: 'active', label: 'Activo', type: 'checkbox', defaultValue: true },
-          ]}
+          title="Productos"
+          description="Listado compacto para revisar lo que se vende, editar datos comerciales y mantener stock visible."
+          endpoint="products"
+          createLabel="Agregar producto"
+          allowCreate={!optionsLoading && !needsSuppliers && !needsCategories}
+          allowDelete={false}
+          fields={productFields}
+          searchPlaceholder="Buscar SKU, codigo de barras, producto, marca o proveedor"
+          searchKeys={['sku', 'barcode', 'name', 'brand', 'supplier_name', 'category', 'subcategory']}
+          quickFilters={productQuickFilters}
+          summary={productSummary}
+          mobileColumns={['name', 'sku', 'price', 'stock_available', 'active']}
+          formSections={productFormSections}
+          emptyTitle="Todavia no hay productos"
+          emptyText="Carga proveedores y categorias activas, despues agrega el primer producto del catalogo."
           columns={[
-            { key: 'name', label: 'Proveedor' },
-            { key: 'contact_name', label: 'Contacto' },
-            { key: 'active', label: 'Activo', format: yesNo },
-          ]}
-        />
-        <ResourceManager
-          title="Categorias"
-          description="Configura categorias propias para ordenar tu catalogo."
-          endpoint="product-categories"
-          createLabel="Agregar categoria"
-          onSaved={refreshOptions}
-          fields={[
-            { name: 'name', label: 'Nombre', required: true },
-            { name: 'active', label: 'Activa', type: 'checkbox', defaultValue: true },
-          ]}
-          columns={[
-            { key: 'name', label: 'Categoria' },
-            { key: 'active', label: 'Activa', format: yesNo },
-          ]}
-        />
-        <ResourceManager
-          title="Sub categorias"
-          description="Configura sub categorias dentro de cada categoria."
-          endpoint="product-subcategories"
-          createLabel="Agregar sub categoria"
-          onSaved={refreshOptions}
-          fields={[
-            { name: 'category', label: 'Categoria', type: 'select', required: true, options: categoryOptions },
-            { name: 'name', label: 'Nombre', required: true },
-            { name: 'active', label: 'Activa', type: 'checkbox', defaultValue: true },
-          ]}
-          columns={[
-            { key: 'category_name', label: 'Categoria' },
-            { key: 'name', label: 'Sub categoria' },
-            { key: 'active', label: 'Activa', format: yesNo },
+            { key: 'sku', label: 'Codigo' },
+            { key: 'name', label: 'Producto' },
+            { key: 'supplier_name', label: 'Proveedor' },
+            { key: 'category', label: 'Categoria' },
+            { key: 'price', label: 'Precio', format: money },
+            { key: 'margin', label: 'Margen', format: (_value, row) => marginPct(row) },
+            { key: 'stock_available', label: 'Stock', format: (_value, row) => stockLabel(row) },
+            { key: 'active', label: 'Estado', format: activeStatus },
           ]}
         />
       </div>
+
+      <section className="grid gap-3 pt-1">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-base font-800 text-slate-950">Datos auxiliares</h2>
+            <p className="text-[13px] leading-5 text-slate-600">
+              Mantiene activos los proveedores y categorias que aparecen en el formulario de productos.
+            </p>
+          </div>
+          <span className="w-fit rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-800 uppercase text-slate-500">
+            {optionsLoading ? 'Cargando opciones' : `${activeReferences}/${totalReferences} activas`}
+          </span>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+          <div className={resourceManagerDensityClass}>
+            <ResourceManager
+              title="Proveedores"
+              description="Asocia cada articulo a su origen comercial."
+              endpoint="product-suppliers"
+              createLabel="Agregar proveedor"
+              onSaved={refreshOptions}
+              fields={[
+                { name: 'name', label: 'Nombre', required: true },
+                { name: 'contact_name', label: 'Contacto' },
+                { name: 'phone', label: 'Telefono' },
+                { name: 'email', label: 'Email', type: 'email' },
+                { name: 'active', label: 'Activo', type: 'checkbox', defaultValue: true },
+              ]}
+              columns={[
+                { key: 'name', label: 'Proveedor' },
+                { key: 'contact_name', label: 'Contacto' },
+                { key: 'active', label: 'Activo', format: yesNo },
+              ]}
+            />
+          </div>
+          <div className={resourceManagerDensityClass}>
+            <ResourceManager
+              title="Categorias"
+              description="Ordena el catalogo principal."
+              endpoint="product-categories"
+              createLabel="Agregar categoria"
+              onSaved={refreshOptions}
+              fields={[
+                { name: 'name', label: 'Nombre', required: true },
+                { name: 'active', label: 'Activa', type: 'checkbox', defaultValue: true },
+              ]}
+              columns={[
+                { key: 'name', label: 'Categoria' },
+                { key: 'active', label: 'Activa', format: yesNo },
+              ]}
+            />
+          </div>
+          <div className={`${resourceManagerDensityClass} lg:col-span-2 2xl:col-span-1`}>
+            <ResourceManager
+              title="Sub categorias"
+              description="Detalla agrupaciones dentro de cada categoria."
+              endpoint="product-subcategories"
+              createLabel="Agregar sub categoria"
+              onSaved={refreshOptions}
+              fields={[
+                { name: 'category', label: 'Categoria', type: 'select', required: true, options: categoryOptions },
+                { name: 'name', label: 'Nombre', required: true },
+                { name: 'active', label: 'Activa', type: 'checkbox', defaultValue: true },
+              ]}
+              columns={[
+                { key: 'category_name', label: 'Categoria' },
+                { key: 'name', label: 'Sub categoria' },
+                { key: 'active', label: 'Activa', format: yesNo },
+              ]}
+            />
+          </div>
+        </div>
+      </section>
     </section>
   )
+}
+
+function activeOptions<T extends ActiveCatalogItem>(items: T[]): SelectOption[] {
+  return [...items]
+    .filter((item) => item.active)
+    .sort((left, right) => left.name.localeCompare(right.name, 'es'))
+    .map((item) => ({ value: String(item.id), label: item.name }))
+}
+
+function activeSubcategoryOptions(items: ProductSubCategory[]): SelectOption[] {
+  return [...items]
+    .filter((item) => item.active)
+    .sort((left, right) => `${left.category_name} ${left.name}`.localeCompare(`${right.category_name} ${right.name}`, 'es'))
+    .map((item) => ({ value: String(item.id), label: `${item.category_name} / ${item.name}` }))
+}
+
+function activeCount(items: Array<{ active: boolean }>) {
+  return items.filter((item) => item.active).length
+}
+
+function activeTotal(items: Array<{ active: boolean }>) {
+  return `${activeCount(items)}/${items.length}`
+}
+
+function CatalogStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-soft">
+      <p className="truncate text-[11px] font-800 uppercase text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-800 text-slate-950">{value}</p>
+    </div>
+  )
+}
+
+function CatalogSetupNotice({
+  needsSuppliers,
+  needsCategories,
+}: {
+  needsSuppliers: boolean
+  needsCategories: boolean
+}) {
+  if (!needsSuppliers && !needsCategories) return null
+
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] leading-5 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+      <p className="font-800">Faltan datos auxiliares activos para crear productos.</p>
+      <p>
+        {needsSuppliers && needsCategories
+          ? 'Carga al menos un proveedor y una categoria.'
+          : needsSuppliers
+            ? 'Carga al menos un proveedor.'
+            : 'Carga al menos una categoria.'}
+      </p>
+    </div>
+  )
+}
+
+function productSummary(rows: ResourceRow[]): Array<{
+  label: string
+  value: string | number
+  hint: string
+  tone: 'success' | 'warning' | 'danger'
+}> {
+  const activeRows = rows.filter((row) => row.active !== false)
+  const noStock = activeRows.filter((row) => asNumber(row.stock_available) <= 0).length
+  const lowStock = activeRows.filter((row) => Boolean(row.low_stock)).length
+  const missingImage = activeRows.filter((row) => !String(row.image_url ?? '').trim()).length
+  const negativeMargin = activeRows.filter((row) => asNumber(row.price) > 0 && asNumber(row.cost) > asNumber(row.price)).length
+
+  return [
+    { label: 'SKUs activos', value: `${activeRows.length}/${rows.length}`, hint: 'Visibles para venta', tone: activeRows.length ? 'success' : 'warning' },
+    { label: 'Sin stock', value: noStock, hint: 'Revisar antes de vender', tone: noStock ? 'danger' : 'success' },
+    { label: 'Bajo minimo', value: lowStock, hint: 'Reposicion sugerida', tone: lowStock ? 'warning' : 'success' },
+    { label: 'Sin imagen', value: missingImage, hint: 'Mejora conversion', tone: missingImage ? 'warning' : 'success' },
+    { label: 'Margen negativo', value: negativeMargin, hint: 'Costo mayor al precio', tone: negativeMargin ? 'danger' : 'success' },
+  ]
+}
+
+function marginPct(row: ResourceRow) {
+  const price = asNumber(row.price)
+  const cost = asNumber(row.cost ?? row.costo)
+  if (price <= 0) return '-'
+  return pct(((price - cost) / price) * 100)
+}
+
+function stockLabel(row: ResourceRow) {
+  const available = asNumber(row.stock_available)
+  const unit = String(row.unit ?? '').trim()
+  const amount = unit ? `${num(available)} ${unit}` : num(available)
+  if (available <= 0) return 'Sin stock'
+  if (row.low_stock) return `Bajo: ${amount}`
+  return amount
+}
+
+function activeStatus(value: unknown) {
+  return value === false ? 'Inactivo' : 'Activo'
+}
+
+function productManagerFields(
+  supplierOptions: SelectOption[],
+  categoryOptions: SelectOption[],
+  subcategoryOptions: SelectOption[],
+): FieldConfig[] {
+  return [
+    { name: 'sku', label: 'Codigo', required: true, placeholder: 'SKU-0001' },
+    { name: 'name', label: 'Nombre', required: true, placeholder: 'Producto, medida y presentacion' },
+    { name: 'brand', label: 'Marca' },
+    { name: 'barcode', label: 'Codigo de barras' },
+    { name: 'active', label: 'Activo para venta', type: 'checkbox', defaultValue: true },
+    {
+      name: 'supplier',
+      label: 'Proveedor',
+      type: 'select',
+      required: true,
+      options: supplierOptions,
+      helperText: supplierOptions.length === 0 ? 'Crea un proveedor activo en datos auxiliares.' : undefined,
+    },
+    {
+      name: 'product_category',
+      label: 'Categoria',
+      type: 'select',
+      required: true,
+      options: categoryOptions,
+      helperText: categoryOptions.length === 0 ? 'Crea una categoria activa en datos auxiliares.' : undefined,
+    },
+    { name: 'product_subcategory', label: 'Sub categoria', type: 'select', options: subcategoryOptions },
+    { name: 'unit', label: 'Unidad de medida', required: true },
+    { name: 'package_size', label: 'Presentacion' },
+    { name: 'price', label: 'Precio', type: 'number', required: true, min: 0, step: 0.01 },
+    { name: 'cost', label: 'Costo', type: 'number', min: 0, step: 0.01 },
+    { name: 'discount_percent', label: 'Porc. descuento', type: 'number', defaultValue: 0, min: 0, max: 100, step: 0.01 },
+    { name: 'discount_name', label: 'Nombre descuento' },
+    { name: 'stock_minimum', label: 'Stock minimo', type: 'number', min: 0, step: 0.001 },
+    { name: 'units_per_package', label: 'Unidades por bulto', type: 'number', required: true, defaultValue: 1, min: 1, step: 1 },
+    { name: 'packages_per_pallet', label: 'Bultos por pallet', type: 'number', min: 0, step: 1 },
+    { name: 'units_per_pallet', label: 'Unidades por pallet', type: 'number', min: 0, step: 1 },
+    { name: 'length', label: 'Largo', type: 'number', required: true, min: 0, step: 0.001 },
+    { name: 'width', label: 'Ancho', type: 'number', required: true, min: 0, step: 0.001 },
+    { name: 'height', label: 'Alto', type: 'number', required: true, min: 0, step: 0.001 },
+    {
+      name: 'dimension_unit',
+      label: 'Unidad largo/ancho/alto',
+      type: 'select',
+      required: true,
+      defaultValue: 'cm',
+      options: [
+        { value: 'cm', label: 'cm' },
+        { value: 'm', label: 'm' },
+        { value: 'mm', label: 'mm' },
+      ],
+    },
+    { name: 'weight', label: 'Peso', type: 'number', required: true, min: 0, step: 0.001 },
+    {
+      name: 'weight_unit',
+      label: 'Unidad de peso',
+      type: 'select',
+      required: true,
+      defaultValue: 'kg',
+      options: [
+        { value: 'kg', label: 'kg' },
+        { value: 'g', label: 'g' },
+      ],
+    },
+    { name: 'image_url', label: 'URL de imagen', type: 'url' },
+    { name: 'characteristics', label: 'Caracteristicas', type: 'textarea', span: 'full' },
+    { name: 'description', label: 'Descripcion', type: 'textarea', span: 'full' },
+  ]
 }
 
 export function CustomersManagerPage() {
