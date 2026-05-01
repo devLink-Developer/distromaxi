@@ -43,6 +43,8 @@ class DistributorAccess:
     onboarding_id: int | None
     distributor_id: int | None
     distributor_name: str | None
+    plan_name: str | None = None
+    routing_enabled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -51,6 +53,8 @@ class DistributorAccess:
             "onboarding_id": self.onboarding_id,
             "distributor_id": self.distributor_id,
             "distributor_name": self.distributor_name,
+            "plan_name": self.plan_name,
+            "routing_enabled": self.routing_enabled,
         }
 
 
@@ -58,12 +62,15 @@ def distributor_access_for_user(user) -> DistributorAccess:
     distributor = user.owned_distributors.order_by("pk").first() if getattr(user, "is_authenticated", False) else None
     onboarding = _safe_onboarding(user) if getattr(user, "is_authenticated", False) else None
     if distributor:
+        plan_name = _active_plan_name(distributor)
         return DistributorAccess(
             state="ACTIVE",
             onboarding_status=getattr(onboarding, "status", None),
             onboarding_id=getattr(onboarding, "id", None),
             distributor_id=distributor.id,
             distributor_name=distributor.business_name,
+            plan_name=plan_name,
+            routing_enabled=bool(distributor.can_operate and str(plan_name or "").upper() in {"PRO", "IA"}),
         )
     if onboarding:
         if onboarding.status == DistributorOnboardingStatus.REVIEW_REQUIRED:
@@ -78,6 +85,8 @@ def distributor_access_for_user(user) -> DistributorAccess:
             onboarding_id=onboarding.id,
             distributor_id=None,
             distributor_name=None,
+            plan_name=getattr(getattr(onboarding, "plan", None), "name", None),
+            routing_enabled=False,
         )
     return DistributorAccess(
         state="NONE",
@@ -85,6 +94,8 @@ def distributor_access_for_user(user) -> DistributorAccess:
         onboarding_id=None,
         distributor_id=None,
         distributor_name=None,
+        plan_name=None,
+        routing_enabled=False,
     )
 
 
@@ -280,3 +291,10 @@ def _safe_onboarding(user):
         return user.distributor_onboarding
     except DistributorOnboarding.DoesNotExist:
         return None
+
+
+def _active_plan_name(distributor):
+    subscription = getattr(distributor, "subscription", None)
+    if subscription and subscription.plan_id and subscription.status in {"TRIAL", "ACTIVE"}:
+        return subscription.plan.name
+    return distributor.plan_name

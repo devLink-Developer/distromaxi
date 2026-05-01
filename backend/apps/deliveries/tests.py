@@ -3,12 +3,11 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.billing.models import Plan, Subscription
 from apps.commerces.models import Commerce
-from apps.deliveries.models import Delivery
 from apps.distributors.models import Distributor
 from apps.fleet.models import DriverProfile, Vehicle
 from apps.orders.models import Order
@@ -104,8 +103,8 @@ class DeliveryRoutingMetadataTests(TestCase):
             delivery_latitude=self.commerce.latitude,
             delivery_longitude=self.commerce.longitude,
         )
-        self.delivery = Delivery.objects.create(order=self.order, driver=self.driver, vehicle=self.vehicle)
 
+    @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
     @patch("apps.routing.engine.ors_build_matrix")
     def test_delivery_endpoint_exposes_route_metadata_after_confirmation(self, build_matrix):
         from apps.routing.engine import generate_route_plan
@@ -131,10 +130,11 @@ class DeliveryRoutingMetadataTests(TestCase):
             generated_by=self.distributor_user,
         )
         self.client.force_authenticate(self.distributor_user)
-        self.client.post(f"/api/route-plans/{route_plan.id}/confirm/")
+        self.client.post(f"/api/route-plans/{route_plan.id}/confirm/", {"reviewed": True}, format="json")
         RouteStop.objects.get(order=self.order)
+        delivery = self.order.delivery
 
-        response = self.client.get(f"/api/deliveries/{self.delivery.id}/")
+        response = self.client.get(f"/api/deliveries/{delivery.id}/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["stop_sequence"], 1)
         self.assertIsNotNone(response.data["planned_eta"])

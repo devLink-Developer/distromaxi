@@ -8,6 +8,8 @@ export type DistributorAccess = {
   onboarding_id: number | null
   distributor_id: number | null
   distributor_name: string | null
+  plan_name: string | null
+  routing_enabled: boolean
 }
 
 export type User = {
@@ -227,6 +229,7 @@ export type DriverProfile = {
   license_category: string
   phone: string
   emergency_contact: string
+  assigned_vehicle: number | null
   assigned_vehicle_plate: string
   available: boolean
   active: boolean
@@ -299,8 +302,11 @@ export type RouteStop = {
   delivery_address: string
   delivery_latitude: string | null
   delivery_longitude: string | null
+  lat: string | null
+  lng: string | null
   sequence: number
   status: string
+  address_snapshot: Record<string, unknown>
   planned_eta: string
   window_start_at: string
   window_end_at: string
@@ -308,13 +314,30 @@ export type RouteStop = {
   leg_duration_min: string
   demand_kg: string
   demand_m3: string
+  lines: RouteStopLine[]
+}
+
+export type RouteStopLine = {
+  id: number
+  order_item: number
+  product: number
+  product_name: string
+  sku: string
+  quantity: string
+  uom: string
+  weight_kg: string
+  volume_m3: string
+  delivered_qty: string
+  returned_qty: string
+  difference_qty: string
+  capacity_estimated: boolean
 }
 
 export type RouteRun = {
   id: number
   sequence: number
   status: string
-  driver: number
+  driver: number | null
   driver_name: string
   vehicle: number
   vehicle_plate: string
@@ -323,16 +346,26 @@ export type RouteRun = {
   total_duration_min: string
   load_kg: string
   load_m3: string
+  route_geometry: GeoJsonLine | GeoJsonMultiLine | null
+  origin_snapshot: Record<string, unknown>
   stops: RouteStop[]
 }
 
 export type RoutePlan = {
   id: number
+  route_number: string | null
   distributor: number
   distributor_name: string
   dispatch_date: string
   status: string
   provider: string
+  routing_status: string
+  route_geometry: GeoJsonLine | GeoJsonMultiLine | null
+  preview_payload: Record<string, unknown>
+  reviewed_at: string | null
+  reviewed_by: number | null
+  planning_version: number
+  capacity_override_reason: string
   total_runs: number
   total_orders: number
   total_distance_km: string
@@ -344,6 +377,32 @@ export type RoutePlan = {
   runs: RouteRun[]
   created_at: string
   updated_at: string
+}
+
+export type PendingRouteOrder = {
+  id: number
+  commerce: number
+  commerce_name: string
+  status: string
+  dispatch_date: string
+  delivery_address: string
+  address_snapshot: Record<string, unknown>
+  lat: string | null
+  lng: string | null
+  planned_weight_kg: string
+  planned_volume_m3: string
+  routable: boolean
+  exclusion_reason: string
+}
+
+export type GeoJsonLine = {
+  type: 'LineString'
+  coordinates: number[][]
+}
+
+export type GeoJsonMultiLine = {
+  type: 'MultiLineString'
+  coordinates: number[][][]
 }
 
 export type CurrentRoute = {

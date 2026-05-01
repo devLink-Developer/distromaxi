@@ -1,5 +1,6 @@
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
 
 from apps.distributors.utils import filter_by_distributor, get_user_distributor
 
@@ -13,6 +14,18 @@ class VehicleViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Vehicle.objects.select_related("distributor")
         return filter_by_distributor(queryset, self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        if not data.get("distributor"):
+            distributor = get_user_distributor(request.user)
+            if distributor is not None:
+                data["distributor"] = distributor.id
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
         distributor = serializer.validated_data.get("distributor") or get_user_distributor(self.request.user)

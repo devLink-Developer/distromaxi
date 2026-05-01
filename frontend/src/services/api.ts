@@ -12,6 +12,7 @@ import type {
   ImportJob,
   NotificationEvent,
   Order,
+  PendingRouteOrder,
   Plan,
   PostalCodeLookup,
   ReverseGeocodedAddress,
@@ -132,11 +133,23 @@ export const api = {
     apiFetch<Delivery>(`/deliveries/${id}/location/`, { method: 'PATCH', body }),
   routePlans: (dispatchDate?: string) => apiFetch<RoutePlan[]>(`/route-plans/${dispatchDate ? `?dispatch_date=${encodeURIComponent(dispatchDate)}` : ''}`),
   routePlan: (id: number | string) => apiFetch<RoutePlan>(`/route-plans/${id}/`),
-  generateRoutePlan: (body: Record<string, unknown>) => apiFetch<RoutePlan>('/route-plans/generate/', { method: 'POST', body }),
+  pendingRouteOrders: (dispatchDate: string) =>
+    apiFetch<PendingRouteOrder[]>(`/route-plans/pending-orders/?dispatch_date=${encodeURIComponent(dispatchDate)}`),
+  generateRoutePlan: (body: Record<string, unknown>, idempotencyKey?: string) =>
+    apiFetch<RoutePlan>('/route-plans/generate/', {
+      method: 'POST',
+      body,
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    }),
   editRoutePlan: (id: number, body: { runs: Array<{ id: number; stop_ids: number[] }> }) =>
     apiFetch<RoutePlan>(`/route-plans/${id}/edit/`, { method: 'POST', body }),
+  patchRouteStops: (
+    id: number,
+    body: { stops: Array<{ id: number; route_run_id?: number; sequence: number; lat?: string; lng?: string }>; remove_stop_ids?: number[] },
+  ) => apiFetch<RoutePlan>(`/route-plans/${id}/stops/`, { method: 'PATCH', body }),
   deleteRoutePlan: (id: number) => apiFetch<void>(`/route-plans/${id}/`, { method: 'DELETE' }),
-  confirmRoutePlan: (id: number) => apiFetch<RoutePlan>(`/route-plans/${id}/confirm/`, { method: 'POST', body: {} }),
+  confirmRoutePlan: (id: number, body: Record<string, unknown> = {}) =>
+    apiFetch<RoutePlan>(`/route-plans/${id}/confirm/`, { method: 'POST', body }),
   dispatchRoutePlan: (id: number) => apiFetch<RoutePlan>(`/route-plans/${id}/dispatch/`, { method: 'POST', body: {} }),
   replanRoutePlan: (id: number) => apiFetch<RoutePlan>(`/route-plans/${id}/replan/`, { method: 'POST', body: {} }),
   currentRoute: () => apiFetch<CurrentRoute | undefined>('/routes/me/current/'),

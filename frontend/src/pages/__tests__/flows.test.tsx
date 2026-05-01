@@ -24,6 +24,8 @@ const inactiveDistributorAccess = {
   onboarding_id: null,
   distributor_id: null,
   distributor_name: null,
+  plan_name: null,
+  routing_enabled: false,
 }
 
 const pendingDistributorAccess = {
@@ -32,6 +34,8 @@ const pendingDistributorAccess = {
   onboarding_id: 7,
   distributor_id: null,
   distributor_name: null,
+  plan_name: 'PRO',
+  routing_enabled: false,
 }
 
 const activeDistributorAccess = {
@@ -40,6 +44,8 @@ const activeDistributorAccess = {
   onboarding_id: 7,
   distributor_id: 3,
   distributor_name: 'Distribuidora Andina',
+  plan_name: 'PRO',
+  routing_enabled: true,
 }
 
 const product: Product = {
@@ -697,6 +703,39 @@ describe('DistroMaxi frontend flows', () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input)
       if (url.includes('/route-plans/generate/')) return jsonResponse(routePlan)
+      if (url.includes('/vehicles/')) {
+        return jsonResponse([
+          {
+            id: 4,
+            plate: 'AB123CD',
+            vehicle_type: 'Camioneta',
+            brand: 'Renault',
+            model: 'Master',
+            year: 2022,
+            capacity_kg: '1200.00',
+            capacity_m3: '12.000',
+            status: 'AVAILABLE',
+            active: true,
+          },
+        ])
+      }
+      if (url.includes('/drivers/')) {
+        return jsonResponse([
+          {
+            id: 3,
+            user_email: 'marta@test.local',
+            full_name: 'Marta Chofer',
+            license_number: 'B123',
+            license_category: 'B2',
+            phone: '111',
+            emergency_contact: '',
+            assigned_vehicle: 4,
+            assigned_vehicle_plate: 'AB123CD',
+            available: true,
+            active: true,
+          },
+        ])
+      }
       if (url.includes('/route-plans/')) return jsonResponse([])
       return jsonResponse([])
     })
@@ -707,10 +746,18 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    await userEvent.click(await screen.findByRole('button', { name: /generar rutas/i }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: /AB123CD/i }))
+    const generateButton = screen.getByRole('button', { name: /generar rutas/i })
+    await waitFor(() => expect(generateButton).toBeEnabled())
+    await userEvent.click(generateButton)
 
     expect(await screen.findByText(/rutas generadas/i)).toBeInTheDocument()
-    expect(await screen.findByText(/marta chofer/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/marta chofer/i)).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      const generateCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/route-plans/generate/'))
+      expect(JSON.parse(String(generateCall?.[1]?.body))).toMatchObject({ vehicle_ids: [4] })
+      expect(JSON.parse(String(generateCall?.[1]?.body))).not.toHaveProperty('vehicle_driver_ids')
+    })
   })
 
   it('renders the driver current route instead of a flat deliveries list', async () => {

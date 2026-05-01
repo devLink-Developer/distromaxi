@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.distributors.models import Distributor
-from apps.fleet.models import DriverProfile
+from apps.fleet.models import DriverProfile, Vehicle
 
 User = get_user_model()
 
@@ -51,6 +51,29 @@ class DriverProvisioningTests(TestCase):
         driver = DriverProfile.objects.get(user__email="driver@test.local")
         self.assertEqual(driver.distributor, self.distributor)
         self.assertEqual(driver.user.role, "DRIVER")
+
+    def test_distributor_can_create_vehicle_without_sending_distributor(self):
+        self.client.force_authenticate(self.distributor_user)
+        response = self.client.post(
+            "/api/vehicles/",
+            {
+                "plate": "AB123CB",
+                "vehicle_type": "Utilitario",
+                "brand": "Renault",
+                "model": "Tracker",
+                "year": 2012,
+                "capacity_kg": "6000",
+                "capacity_m3": "6",
+                "insurance_expires_at": "2027-02-28",
+                "inspection_expires_at": "2027-07-30",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        vehicle = Vehicle.objects.get(plate="AB123CB")
+        self.assertEqual(vehicle.distributor, self.distributor)
+        self.assertEqual(vehicle.capacity_kg, 6000)
 
     def test_admin_cannot_create_driver_accounts(self):
         self.client.force_authenticate(self.admin)

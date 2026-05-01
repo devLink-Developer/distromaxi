@@ -1,3 +1,5 @@
+import hashlib
+import json
 from decimal import Decimal
 
 from django.conf import settings
@@ -14,7 +16,7 @@ ROUTING_ENABLED_PLANS = {"PRO", "IA"}
 
 def distributor_plan_name(distributor):
     subscription = getattr(distributor, "subscription", None)
-    if subscription and subscription.plan_id:
+    if subscription and subscription.plan_id and subscription.status in {"TRIAL", "ACTIVE"}:
         return str(subscription.plan.name or "").upper()
     return str(distributor.plan_name or "").upper()
 
@@ -50,6 +52,11 @@ def active_route_delivery_statuses():
 
 def decimal_zero(scale="0.000"):
     return Decimal(scale)
+
+
+def request_payload_hash(payload):
+    normalized = json.dumps(payload or {}, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def route_plan_delete_state(route_plan):

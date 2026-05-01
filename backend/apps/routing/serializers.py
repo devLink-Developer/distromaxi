@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.deliveries.models import Delivery
 
-from .models import RoutePlan, RouteRun, RouteStop
+from .models import RoutePlan, RouteRun, RouteStop, RouteStopLine
 from .services import route_plan_delete_state
 
 
@@ -11,6 +11,12 @@ class RouteGenerateSerializer(serializers.Serializer):
     order_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
     driver_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
     vehicle_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
+    vehicle_driver_ids = serializers.DictField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+
+class RouteConfirmSerializer(serializers.Serializer):
+    reviewed = serializers.BooleanField(required=False, default=False)
+    capacity_override_reason = serializers.CharField(required=False, allow_blank=True)
 
 
 class RouteRunEditSerializer(serializers.Serializer):
@@ -22,13 +28,54 @@ class RoutePlanEditSerializer(serializers.Serializer):
     runs = RouteRunEditSerializer(many=True, allow_empty=False)
 
 
+class RouteStopPatchItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    sequence = serializers.IntegerField(min_value=1)
+    route_run_id = serializers.IntegerField(required=False)
+    lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
+    lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
+    latitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
+    longitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
+
+
+class RouteStopsPatchSerializer(serializers.Serializer):
+    stops = RouteStopPatchItemSerializer(many=True, allow_empty=True)
+    remove_stop_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+
+class RouteStopLineSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    sku = serializers.CharField(source="product.sku", read_only=True)
+
+    class Meta:
+        model = RouteStopLine
+        fields = [
+            "id",
+            "order_item",
+            "product",
+            "product_name",
+            "sku",
+            "quantity",
+            "uom",
+            "weight_kg",
+            "volume_m3",
+            "delivered_qty",
+            "returned_qty",
+            "difference_qty",
+            "capacity_estimated",
+        ]
+
+
 class RouteStopSerializer(serializers.ModelSerializer):
     order_status = serializers.CharField(source="order.status", read_only=True)
     commerce_name = serializers.CharField(source="order.commerce.trade_name", read_only=True)
     delivery_address = serializers.CharField(source="order.delivery_address", read_only=True)
-    delivery_latitude = serializers.DecimalField(source="order.delivery_latitude", max_digits=10, decimal_places=7, read_only=True)
-    delivery_longitude = serializers.DecimalField(source="order.delivery_longitude", max_digits=10, decimal_places=7, read_only=True)
+    delivery_latitude = serializers.DecimalField(source="latitude", max_digits=10, decimal_places=7, read_only=True)
+    delivery_longitude = serializers.DecimalField(source="longitude", max_digits=10, decimal_places=7, read_only=True)
     delivery_id = serializers.IntegerField(source="delivery.id", read_only=True, allow_null=True)
+    lat = serializers.DecimalField(source="latitude", max_digits=10, decimal_places=7, read_only=True)
+    lng = serializers.DecimalField(source="longitude", max_digits=10, decimal_places=7, read_only=True)
+    lines = RouteStopLineSerializer(many=True, read_only=True)
 
     class Meta:
         model = RouteStop
@@ -41,8 +88,11 @@ class RouteStopSerializer(serializers.ModelSerializer):
             "delivery_address",
             "delivery_latitude",
             "delivery_longitude",
+            "lat",
+            "lng",
             "sequence",
             "status",
+            "address_snapshot",
             "planned_eta",
             "window_start_at",
             "window_end_at",
@@ -50,11 +100,12 @@ class RouteStopSerializer(serializers.ModelSerializer):
             "leg_duration_min",
             "demand_kg",
             "demand_m3",
+            "lines",
         ]
 
 
 class RouteRunSerializer(serializers.ModelSerializer):
-    driver_name = serializers.CharField(source="driver.user.full_name", read_only=True)
+    driver_name = serializers.SerializerMethodField()
     vehicle_plate = serializers.CharField(source="vehicle.plate", read_only=True)
     stops = RouteStopSerializer(many=True, read_only=True)
 
@@ -73,8 +124,13 @@ class RouteRunSerializer(serializers.ModelSerializer):
             "total_duration_min",
             "load_kg",
             "load_m3",
+            "route_geometry",
+            "origin_snapshot",
             "stops",
         ]
+
+    def get_driver_name(self, obj):
+        return obj.driver.user.full_name if obj.driver_id else "Sin chofer asignado"
 
 
 class RoutePlanSerializer(serializers.ModelSerializer):
@@ -86,11 +142,19 @@ class RoutePlanSerializer(serializers.ModelSerializer):
         model = RoutePlan
         fields = [
             "id",
+            "route_number",
             "distributor",
             "distributor_name",
             "dispatch_date",
             "status",
             "provider",
+            "routing_status",
+            "route_geometry",
+            "preview_payload",
+            "reviewed_at",
+            "reviewed_by",
+            "planning_version",
+            "capacity_override_reason",
             "total_runs",
             "total_orders",
             "total_distance_km",
@@ -112,7 +176,7 @@ class RoutePlanSerializer(serializers.ModelSerializer):
 class CurrentRouteSerializer(serializers.ModelSerializer):
     route_plan_id = serializers.IntegerField(source="route_plan.id", read_only=True)
     route_plan_status = serializers.CharField(source="route_plan.status", read_only=True)
-    driver_name = serializers.CharField(source="driver.user.full_name", read_only=True)
+    driver_name = serializers.SerializerMethodField()
     vehicle_plate = serializers.CharField(source="vehicle.plate", read_only=True)
     stops = RouteStopSerializer(many=True, read_only=True)
     active_stop_id = serializers.SerializerMethodField()
@@ -135,6 +199,9 @@ class CurrentRouteSerializer(serializers.ModelSerializer):
             "active_stop_id",
             "stops",
         ]
+
+    def get_driver_name(self, obj):
+        return obj.driver.user.full_name if obj.driver_id else "Sin chofer asignado"
 
     def get_active_stop_id(self, obj):
         active = obj.stops.filter(status__in=["PENDING", "ARRIVED"]).order_by("sequence").first()

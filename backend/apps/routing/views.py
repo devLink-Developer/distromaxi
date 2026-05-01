@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import decorators, mixins, permissions, response, status, viewsets
 from rest_framework.views import APIView
 
@@ -8,10 +9,18 @@ from apps.notifications.services import notify_order_status, notify_user
 from apps.orders.models import OrderStatus
 from apps.inventory.services import commit_reserved_stock
 
-from .engine import edit_route_plan, generate_route_plan
-from .models import RoutePlan, RoutePlanStatus, RouteRun, RouteRunStatus, RouteStop, RouteStopStatus
-from .serializers import CurrentRouteSerializer, RouteGenerateSerializer, RoutePlanEditSerializer, RoutePlanSerializer, RouteStopSerializer
-from .services import get_routing_distributor, route_plan_delete_state
+from .engine import edit_route_plan, generate_route_plan, patch_route_plan_stops, pending_route_orders
+from .models import IdempotencyKey, IdempotencyStatus, RouteAuditEvent, RoutePlan, RoutePlanStatus, RouteRun, RouteRunStatus, RouteStop, RouteStopStatus
+from .serializers import (
+    CurrentRouteSerializer,
+    RouteConfirmSerializer,
+    RouteGenerateSerializer,
+    RoutePlanEditSerializer,
+    RoutePlanSerializer,
+    RouteStopSerializer,
+    RouteStopsPatchSerializer,
+)
+from .services import distributor_has_routing, get_routing_distributor, request_payload_hash, route_plan_delete_state
 
 
 class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
@@ -29,6 +38,8 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
             "runs__stops__order",
             "runs__stops__order__commerce",
             "runs__stops__delivery",
+            "runs__stops__lines",
+            "runs__stops__lines__product",
         )
         dispatch_date = self.request.query_params.get("dispatch_date")
         queryset = queryset.filter(distributor=distributor)
@@ -45,11 +56,37 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
             route_plan.delete()
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
+    @decorators.action(detail=False, methods=["get"], url_path="pending-orders")
+    def pending_orders(self, request):
+        dispatch_date = request.query_params.get("dispatch_date")
+        if not dispatch_date:
+            return response.Response({"detail": "dispatch_date es obligatorio."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = RouteGenerateSerializer(data={"dispatch_date": dispatch_date})
+        serializer.is_valid(raise_exception=True)
+        distributor = get_routing_distributor(request.user)
+        return response.Response(pending_route_orders(distributor=distributor, dispatch_date=serializer.validated_data["dispatch_date"]))
+
     @decorators.action(detail=False, methods=["post"], url_path="generate")
     def generate(self, request):
         serializer = RouteGenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         distributor = get_routing_distributor(request.user)
+        idempotency_key = request.headers.get("Idempotency-Key")
+        idempotency_record = None
+        payload_hash = request_payload_hash({"action": "route_plan_generate", "distributor_id": distributor.id, "payload": serializer.validated_data})
+        if idempotency_key:
+            idempotency_record, created = IdempotencyKey.objects.get_or_create(
+                key=idempotency_key,
+                defaults={"request_hash": payload_hash, "status": IdempotencyStatus.IN_PROGRESS},
+            )
+            if not created:
+                if idempotency_record.request_hash != payload_hash:
+                    return response.Response(
+                        {"detail": "La Idempotency-Key ya fue usada con otro payload."},
+                        status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    )
+                if idempotency_record.status == IdempotencyStatus.COMPLETED:
+                    return response.Response(idempotency_record.response_payload, status=status.HTTP_201_CREATED)
         try:
             route_plan = generate_route_plan(
                 distributor=distributor,
@@ -58,18 +95,41 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
                 order_ids=serializer.validated_data.get("order_ids"),
                 driver_ids=serializer.validated_data.get("driver_ids"),
                 vehicle_ids=serializer.validated_data.get("vehicle_ids"),
+                vehicle_driver_ids=serializer.validated_data.get("vehicle_driver_ids"),
             )
         except DjangoValidationError as exc:
+            if idempotency_record:
+                idempotency_record.status = IdempotencyStatus.FAILED
+                idempotency_record.save(update_fields=["status", "updated_at"])
             return response.Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
-        return response.Response(self.get_serializer(route_plan).data, status=status.HTTP_201_CREATED)
+        payload = self.get_serializer(route_plan).data
+        if idempotency_record:
+            idempotency_record.request_hash = payload_hash
+            idempotency_record.response_payload = payload
+            idempotency_record.status = IdempotencyStatus.COMPLETED
+            idempotency_record.save(update_fields=["request_hash", "response_payload", "status", "updated_at"])
+        return response.Response(payload, status=status.HTTP_201_CREATED)
 
     @decorators.action(detail=True, methods=["post"], url_path="confirm")
     def confirm(self, request, pk=None):
         route_plan = self.get_object()
         if route_plan.status not in {RoutePlanStatus.DRAFT, RoutePlanStatus.CONFIRMED}:
             return response.Response({"detail": "Solo se pueden confirmar planes en borrador."}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = RouteConfirmSerializer(data=request.data or {})
+        serializer.is_valid(raise_exception=True)
+        if route_plan.status == RoutePlanStatus.DRAFT and route_plan.reviewed_at is None and not serializer.validated_data["reviewed"]:
+            return response.Response({"detail": "Debes revisar el mapa antes de confirmar la ruta."}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
             for run in route_plan.runs.select_related("driver", "driver__user", "vehicle").prefetch_related("stops__order"):
+                if not run.driver_id:
+                    return response.Response(
+                        {"detail": "Selecciona un chofer para todos los recorridos antes de confirmar la ruta."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                capacity_error = _capacity_error(run)
+                override_reason = serializer.validated_data.get("capacity_override_reason", "")
+                if capacity_error and not override_reason:
+                    return response.Response({"detail": capacity_error}, status=status.HTTP_400_BAD_REQUEST)
                 run.status = RouteRunStatus.CONFIRMED
                 run.save(update_fields=["status", "updated_at"])
                 for stop in run.stops.all():
@@ -87,7 +147,7 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
                         stop.order.status = OrderStatus.SCHEDULED
                         stop.order.save(update_fields=["status", "updated_at"])
                         notify_order_status(stop.order)
-                    if run.driver.user_id:
+                    if run.driver_id and run.driver.user_id:
                         notify_user(
                             run.driver.user,
                             f"Entrega asignada #{delivery.id}",
@@ -96,7 +156,17 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
                             {"delivery_id": delivery.id, "order_id": stop.order_id},
                         )
             route_plan.status = RoutePlanStatus.CONFIRMED
-            route_plan.save(update_fields=["status", "updated_at"])
+            route_plan.reviewed_at = route_plan.reviewed_at or timezone.now()
+            route_plan.reviewed_by = route_plan.reviewed_by or request.user
+            route_plan.capacity_override_reason = serializer.validated_data.get("capacity_override_reason", "")
+            route_plan.optimization_runs.update(accepted=True)
+            route_plan.save(update_fields=["status", "reviewed_at", "reviewed_by", "capacity_override_reason", "updated_at"])
+            RouteAuditEvent.objects.create(
+                route_plan=route_plan,
+                event_type="route_confirmed",
+                actor=request.user,
+                payload={"reviewed": True, "capacity_override": bool(route_plan.capacity_override_reason)},
+            )
         return response.Response(self.get_serializer(route_plan).data)
 
     @decorators.action(detail=True, methods=["post"], url_path="edit")
@@ -107,7 +177,23 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
         serializer = RoutePlanEditSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            updated = edit_route_plan(route_plan=route_plan, runs_payload=serializer.validated_data["runs"])
+            updated = edit_route_plan(route_plan=route_plan, runs_payload=serializer.validated_data["runs"], reviewed_by=request.user)
+        except DjangoValidationError as exc:
+            return response.Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+        return response.Response(self.get_serializer(updated).data)
+
+    @decorators.action(detail=True, methods=["patch"], url_path="stops")
+    def patch_stops(self, request, pk=None):
+        route_plan = self.get_object()
+        serializer = RouteStopsPatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            updated = patch_route_plan_stops(
+                route_plan=route_plan,
+                stops_payload=serializer.validated_data["stops"],
+                remove_stop_ids=serializer.validated_data.get("remove_stop_ids", []),
+                reviewed_by=request.user,
+            )
         except DjangoValidationError as exc:
             return response.Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
         return response.Response(self.get_serializer(updated).data)
@@ -170,9 +256,11 @@ class DriverCurrentRouteView(APIView):
         user = request.user
         if user.role != "DRIVER" or not hasattr(user, "driver_profile"):
             return response.Response({"detail": "Solo los choferes pueden consultar su ruta actual."}, status=status.HTTP_403_FORBIDDEN)
+        if not distributor_has_routing(user.driver_profile.distributor):
+            return response.Response({"detail": "El ruteo automatico esta disponible solo para planes PRO e IA activos."}, status=status.HTTP_403_FORBIDDEN)
         queryset = (
             RouteRun.objects.select_related("route_plan", "driver", "driver__user", "vehicle")
-            .prefetch_related("stops", "stops__order", "stops__order__commerce", "stops__delivery")
+            .prefetch_related("stops", "stops__order", "stops__order__commerce", "stops__delivery", "stops__lines", "stops__lines__product")
             .filter(driver=user.driver_profile, route_plan__status__in=[RoutePlanStatus.DISPATCHED, RoutePlanStatus.CONFIRMED])
             .order_by("-route_plan__dispatch_date", "sequence")
         )
@@ -196,9 +284,11 @@ class RouteStopViewSet(viewsets.ReadOnlyModelViewSet):
             "order",
             "order__commerce",
             "delivery",
-        )
+        ).prefetch_related("lines", "lines__product")
         user = self.request.user
         if user.role == "DRIVER" and hasattr(user, "driver_profile"):
+            if not distributor_has_routing(user.driver_profile.distributor):
+                return queryset.none()
             return queryset.filter(route_run__driver=user.driver_profile)
         distributor = get_routing_distributor(user)
         return queryset.filter(route_run__route_plan__distributor=distributor)
@@ -241,3 +331,20 @@ class RouteStopViewSet(viewsets.ReadOnlyModelViewSet):
                     route_plan.status = RoutePlanStatus.COMPLETED
                     route_plan.save(update_fields=["status", "updated_at"])
         return response.Response(self.get_serializer(stop).data)
+
+
+def _capacity_error(run):
+    vehicle = run.vehicle
+    capacity_kg = vehicle.capacity_kg or 0
+    capacity_m3 = vehicle.capacity_m3 or 0
+    if capacity_kg and run.load_kg > capacity_kg:
+        return f"El recorrido de {_run_label(run)} supera la capacidad en kg."
+    if capacity_m3 and run.load_m3 > capacity_m3:
+        return f"El recorrido de {_run_label(run)} supera la capacidad en m3."
+    return ""
+
+
+def _run_label(run):
+    if run.driver_id:
+        return run.driver.user.full_name
+    return run.vehicle.plate
