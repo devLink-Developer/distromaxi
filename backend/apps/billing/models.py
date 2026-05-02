@@ -3,13 +3,14 @@ from django.db import models
 
 class Plan(models.Model):
     class PlanName(models.TextChoices):
-        START = "START", "START"
-        PRO = "PRO", "PRO"
-        IA = "IA", "IA"
+        STANDARD = "Standard", "Standard"
+        PLUS = "Plus", "Plus"
+        PRO = "Pro", "Pro"
 
     name = models.CharField(max_length=20, choices=PlanName.choices, unique=True)
     price = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.TextField(blank=True)
+    features = models.JSONField(default=list, blank=True)
     currency = models.CharField(max_length=3, default="ARS")
     mp_subscription_url = models.URLField(blank=True)
     mp_preapproval_plan_id = models.CharField(max_length=120, blank=True)

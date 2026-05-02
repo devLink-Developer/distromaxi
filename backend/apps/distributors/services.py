@@ -34,6 +34,8 @@ FAILED_MP_STATUSES = {
     "expired",
 }
 SUSPENDED_MP_STATUSES = {"paused"}
+MANUAL_ROUTING_PLANS = {"STANDARD", "PLUS", "PRO"}
+AUTOMATIC_ROUTING_PLANS = {"PRO"}
 
 
 @dataclass
@@ -45,6 +47,8 @@ class DistributorAccess:
     distributor_name: str | None
     plan_name: str | None = None
     routing_enabled: bool = False
+    manual_routing_enabled: bool = False
+    automatic_routing_enabled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +59,8 @@ class DistributorAccess:
             "distributor_name": self.distributor_name,
             "plan_name": self.plan_name,
             "routing_enabled": self.routing_enabled,
+            "manual_routing_enabled": self.manual_routing_enabled,
+            "automatic_routing_enabled": self.automatic_routing_enabled,
         }
 
 
@@ -63,6 +69,9 @@ def distributor_access_for_user(user) -> DistributorAccess:
     onboarding = _safe_onboarding(user) if getattr(user, "is_authenticated", False) else None
     if distributor:
         plan_name = _active_plan_name(distributor)
+        can_operate = bool(distributor.can_operate)
+        manual_routing_enabled = can_operate and _plan_key(plan_name) in MANUAL_ROUTING_PLANS
+        automatic_routing_enabled = can_operate and _plan_key(plan_name) in AUTOMATIC_ROUTING_PLANS
         return DistributorAccess(
             state="ACTIVE",
             onboarding_status=getattr(onboarding, "status", None),
@@ -70,7 +79,9 @@ def distributor_access_for_user(user) -> DistributorAccess:
             distributor_id=distributor.id,
             distributor_name=distributor.business_name,
             plan_name=plan_name,
-            routing_enabled=bool(distributor.can_operate and str(plan_name or "").upper() in {"PRO", "IA"}),
+            routing_enabled=manual_routing_enabled or automatic_routing_enabled,
+            manual_routing_enabled=manual_routing_enabled,
+            automatic_routing_enabled=automatic_routing_enabled,
         )
     if onboarding:
         if onboarding.status == DistributorOnboardingStatus.REVIEW_REQUIRED:
@@ -298,3 +309,7 @@ def _active_plan_name(distributor):
     if subscription and subscription.plan_id and subscription.status in {"TRIAL", "ACTIVE"}:
         return subscription.plan.name
     return distributor.plan_name
+
+
+def _plan_key(plan_name):
+    return str(plan_name or "").replace(" ", "_").upper()

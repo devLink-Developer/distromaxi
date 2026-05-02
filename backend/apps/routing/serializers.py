@@ -8,10 +8,23 @@ from .services import route_plan_delete_state
 
 class RouteGenerateSerializer(serializers.Serializer):
     dispatch_date = serializers.DateField()
+    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True)
     order_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
     driver_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
     vehicle_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
     vehicle_driver_ids = serializers.DictField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+
+class ManualRouteRunSerializer(serializers.Serializer):
+    vehicle_id = serializers.IntegerField()
+    driver_id = serializers.IntegerField(required=False, allow_null=True)
+    order_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+
+
+class ManualRoutePlanSerializer(serializers.Serializer):
+    dispatch_date = serializers.DateField()
+    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True)
+    runs = ManualRouteRunSerializer(many=True, allow_empty=False)
 
 
 class RouteConfirmSerializer(serializers.Serializer):
@@ -29,13 +42,20 @@ class RoutePlanEditSerializer(serializers.Serializer):
 
 
 class RouteStopPatchItemSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.IntegerField(required=False)
+    order_id = serializers.IntegerField(required=False)
     sequence = serializers.IntegerField(min_value=1)
     route_run_id = serializers.IntegerField(required=False)
     lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
     lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
     latitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
     longitude = serializers.DecimalField(max_digits=10, decimal_places=7, required=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("id") and not attrs.get("order_id"):
+            raise serializers.ValidationError("Envia id de parada existente u order_id para agregar una parada.")
+        return attrs
 
 
 class RouteStopsPatchSerializer(serializers.Serializer):
@@ -135,6 +155,7 @@ class RouteRunSerializer(serializers.ModelSerializer):
 
 class RoutePlanSerializer(serializers.ModelSerializer):
     distributor_name = serializers.CharField(source="distributor.business_name", read_only=True)
+    delivery_slot_name = serializers.CharField(source="delivery_slot.name", read_only=True, allow_null=True)
     runs = RouteRunSerializer(many=True, read_only=True)
     can_delete = serializers.SerializerMethodField()
 
@@ -146,6 +167,10 @@ class RoutePlanSerializer(serializers.ModelSerializer):
             "distributor",
             "distributor_name",
             "dispatch_date",
+            "delivery_slot",
+            "delivery_slot_name",
+            "delivery_window_start",
+            "delivery_window_end",
             "status",
             "provider",
             "routing_status",

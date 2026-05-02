@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.distributors.models import DistributorDeliverySlot
 from apps.inventory.services import reserve_stock
 from apps.products.models import Product
 
@@ -27,6 +28,9 @@ class OrderLineInputSerializer(serializers.Serializer):
 class OrderSerializer(serializers.ModelSerializer):
     commerce_name = serializers.CharField(source="commerce.trade_name", read_only=True)
     distributor_name = serializers.CharField(source="distributor.business_name", read_only=True)
+    delivery_slot_name = serializers.CharField(source="delivery_slot.name", read_only=True, allow_null=True)
+    delivery_slot_start_time = serializers.TimeField(source="delivery_slot.start_time", read_only=True, allow_null=True)
+    delivery_slot_end_time = serializers.TimeField(source="delivery_slot.end_time", read_only=True, allow_null=True)
     items = OrderItemSerializer(many=True, read_only=True)
     line_items = OrderLineInputSerializer(many=True, write_only=True, required=False)
 
@@ -41,6 +45,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "total",
             "status",
             "dispatch_date",
+            "delivery_slot",
+            "delivery_slot_name",
+            "delivery_slot_start_time",
+            "delivery_slot_end_time",
             "delivery_address",
             "delivery_latitude",
             "delivery_longitude",
@@ -62,6 +70,13 @@ class OrderSerializer(serializers.ModelSerializer):
         end = attrs.get("delivery_window_end", getattr(self.instance, "delivery_window_end", None))
         if start and end and start > end:
             raise serializers.ValidationError({"delivery_window_end": "La franja horaria es invalida."})
+        delivery_slot = attrs.get("delivery_slot")
+        if delivery_slot is not None:
+            distributor = attrs.get("distributor", getattr(self.instance, "distributor", None))
+            if distributor is not None and delivery_slot.distributor_id != distributor.id:
+                raise serializers.ValidationError({"delivery_slot": "La franja no pertenece a la distribuidora del pedido."})
+            if not delivery_slot.active:
+                raise serializers.ValidationError({"delivery_slot": "Selecciona una franja activa."})
         if self.instance is None:
             request = self.context.get("request")
             commerce = attrs.get("commerce")
@@ -103,6 +118,10 @@ class OrderSerializer(serializers.ModelSerializer):
             validated_data.setdefault("delivery_longitude", commerce.longitude)
             validated_data.setdefault("delivery_window_start", commerce.default_window_start)
             validated_data.setdefault("delivery_window_end", commerce.default_window_end)
+        delivery_slot = validated_data.get("delivery_slot")
+        if delivery_slot is not None:
+            validated_data["delivery_window_start"] = delivery_slot.start_time
+            validated_data["delivery_window_end"] = delivery_slot.end_time
 
         order = Order.objects.create(total=total, **validated_data)
         for product, quantity in products:
@@ -123,6 +142,38 @@ class OrderSerializer(serializers.ModelSerializer):
                 volume_m3=volume_total_m3(product, quantity_decimal),
             )
         return order
+
+    def update(self, instance, validated_data):
+        delivery_slot = validated_data.get("delivery_slot")
+        if delivery_slot is not None:
+            validated_data["delivery_window_start"] = delivery_slot.start_time
+            validated_data["delivery_window_end"] = delivery_slot.end_time
+        return super().update(instance, validated_data)
+
+
+class OrderDecisionSerializer(serializers.Serializer):
+    decision = serializers.ChoiceField(choices=["ACCEPT", "REJECT"])
+    dispatch_date = serializers.DateField(required=False)
+    delivery_slot_id = serializers.IntegerField(required=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs["decision"] == "ACCEPT":
+            if not attrs.get("dispatch_date"):
+                raise serializers.ValidationError({"dispatch_date": "La fecha de entrega es obligatoria."})
+            if not attrs.get("delivery_slot_id"):
+                raise serializers.ValidationError({"delivery_slot_id": "Selecciona una franja horaria."})
+            order = self.context["order"]
+            try:
+                slot = DistributorDeliverySlot.objects.get(
+                    pk=attrs["delivery_slot_id"],
+                    distributor=order.distributor,
+                    active=True,
+                )
+            except DistributorDeliverySlot.DoesNotExist as exc:
+                raise serializers.ValidationError({"delivery_slot_id": "Selecciona una franja activa de la distribuidora."}) from exc
+            attrs["delivery_slot"] = slot
+        return attrs
 
 
 def weight_total_kg(product, quantity):

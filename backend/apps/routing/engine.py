@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.deliveries.models import DeliveryStatus
+from apps.distributors.models import DistributorDeliverySlot
 from apps.fleet.models import DriverProfile, Vehicle, VehicleStatus
 from apps.orders.models import Order, OrderStatus
 
@@ -83,14 +84,26 @@ class RouteState:
             self.vehicle = self.driver.assigned_vehicle
 
 
-def generate_route_plan(*, distributor, dispatch_date, generated_by=None, order_ids=None, driver_ids=None, vehicle_ids=None, vehicle_driver_ids=None):
-    draft_plans = list(
-        RoutePlan.objects.filter(
-            distributor=distributor,
-            dispatch_date=dispatch_date,
-            status=RoutePlanStatus.DRAFT,
-        ).prefetch_related("runs__stops")
+def generate_route_plan(
+    *,
+    distributor,
+    dispatch_date,
+    generated_by=None,
+    order_ids=None,
+    driver_ids=None,
+    vehicle_ids=None,
+    vehicle_driver_ids=None,
+    delivery_slot_id=None,
+):
+    delivery_slot = _resolve_delivery_slot(distributor, delivery_slot_id)
+    draft_queryset = RoutePlan.objects.filter(
+        distributor=distributor,
+        dispatch_date=dispatch_date,
+        status=RoutePlanStatus.DRAFT,
     )
+    if delivery_slot is not None:
+        draft_queryset = draft_queryset.filter(delivery_slot=delivery_slot)
+    draft_plans = list(draft_queryset.prefetch_related("runs__stops"))
     draft_order_ids = {
         stop.order_id
         for plan in draft_plans
@@ -99,7 +112,15 @@ def generate_route_plan(*, distributor, dispatch_date, generated_by=None, order_
     }
     requested_order_ids = set(order_ids or [])
     combined_order_ids = sorted(requested_order_ids | draft_order_ids) if requested_order_ids or draft_order_ids else None
-    orders = list(_eligible_orders(distributor, dispatch_date, combined_order_ids, include_draft_plan_ids=[plan.id for plan in draft_plans]))
+    orders = list(
+        _eligible_orders(
+            distributor,
+            dispatch_date,
+            combined_order_ids,
+            include_draft_plan_ids=[plan.id for plan in draft_plans],
+            delivery_slot=delivery_slot,
+        )
+    )
     if not orders:
         raise ValidationError("No hay pedidos para la fecha seleccionada.")
     route_resources = _eligible_route_resources(
@@ -162,6 +183,103 @@ def generate_route_plan(*, distributor, dispatch_date, generated_by=None, order_
         origin=origin,
         requested_vehicle_ids=vehicle_ids,
         vehicle_driver_ids=vehicle_driver_ids,
+        delivery_slot=delivery_slot,
+    )
+
+
+def create_manual_route_plan(*, distributor, dispatch_date, runs_payload, generated_by=None, delivery_slot_id=None):
+    delivery_slot = _resolve_delivery_slot(distributor, delivery_slot_id)
+    draft_queryset = RoutePlan.objects.filter(
+        distributor=distributor,
+        dispatch_date=dispatch_date,
+        status=RoutePlanStatus.DRAFT,
+    )
+    if delivery_slot is not None:
+        draft_queryset = draft_queryset.filter(delivery_slot=delivery_slot)
+    draft_plans = list(draft_queryset.prefetch_related("runs__stops"))
+    submitted_order_ids = [order_id for run in runs_payload for order_id in run.get("order_ids", [])]
+    requested_order_ids = _unique_ints(submitted_order_ids)
+    if len(requested_order_ids) != len(submitted_order_ids):
+        raise ValidationError("No puedes repetir pedidos dentro de una ruta manual.")
+    if not requested_order_ids:
+        raise ValidationError("Selecciona al menos un pedido para crear una ruta manual.")
+    requested_vehicle_ids = _unique_ints([run["vehicle_id"] for run in runs_payload])
+    if len(requested_vehicle_ids) != len([run["vehicle_id"] for run in runs_payload]):
+        raise ValidationError("No puedes repetir vehiculos dentro de una ruta manual.")
+    vehicle_driver_ids = {
+        str(run["vehicle_id"]): run.get("driver_id")
+        for run in runs_payload
+        if run.get("driver_id") not in (None, "")
+    }
+    route_resources = _eligible_route_resources(
+        distributor=distributor,
+        driver_ids=None,
+        vehicle_ids=requested_vehicle_ids,
+        vehicle_driver_ids=vehicle_driver_ids,
+    )
+    resource_by_vehicle_id = {vehicle.id: (vehicle, driver) for vehicle, driver in route_resources}
+    if set(requested_vehicle_ids) - set(resource_by_vehicle_id):
+        raise ValidationError("Hay vehiculos seleccionados que no estan activos o no tienen capacidad cargada.")
+    origin = _resolve_origin(distributor)
+    if origin is None:
+        raise ValidationError("La distribuidora necesita coordenadas para crear rutas.")
+
+    orders = list(
+        _eligible_orders(
+            distributor,
+            dispatch_date,
+            requested_order_ids,
+            include_draft_plan_ids=[plan.id for plan in draft_plans],
+            delivery_slot=delivery_slot,
+        )
+    )
+    found_order_ids = {order.id for order in orders}
+    if set(requested_order_ids) - found_order_ids:
+        raise ValidationError("Hay pedidos que ya no estan disponibles para rutear.")
+    candidate_stops, unassigned = _build_candidates(orders, dispatch_date)
+    candidate_by_order_id = {candidate.order.id: candidate for candidate in candidate_stops}
+    if not candidate_by_order_id:
+        raise ValidationError("No hay pedidos ruteables con coordenadas validas.")
+
+    matrix = _build_fallback_matrix(
+        (origin["latitude"], origin["longitude"]),
+        [(candidate.latitude, candidate.longitude) for candidate in candidate_stops],
+        routing_status="manual",
+    )
+    routes = []
+    for run in runs_payload:
+        vehicle, driver = resource_by_vehicle_id[run["vehicle_id"]]
+        route = RouteState(driver=driver, vehicle=vehicle)
+        route.origin_snapshot = origin
+        route.stops = [candidate_by_order_id[order_id] for order_id in run.get("order_ids", []) if order_id in candidate_by_order_id]
+        if not route.stops:
+            continue
+        route.load_kg = sum((candidate.demand.kg for candidate in route.stops), start=Decimal("0"))
+        route.load_m3 = sum((candidate.demand.m3 for candidate in route.stops), start=Decimal("0"))
+        _validate_route_capacity(route, vehicle)
+        evaluation = _evaluate_route(route.stops, matrix, dispatch_date)
+        if not evaluation.feasible:
+            raise ValidationError("La ruta manual propuesta no respeta las ventanas horarias vigentes.")
+        _apply_route_evaluation(route, evaluation)
+        _apply_route_geometry(route, origin=origin, base_routing_status="manual")
+        routes.append(route)
+
+    if not routes:
+        raise ValidationError("No quedaron recorridos con pedidos ruteables.")
+    return _persist_route_plan(
+        distributor=distributor,
+        dispatch_date=dispatch_date,
+        generated_by=generated_by,
+        routes=routes,
+        unassigned=unassigned,
+        draft_plans=draft_plans,
+        requested_order_ids=requested_order_ids,
+        routing_provider="manual",
+        routing_status="manual",
+        origin=origin,
+        requested_vehicle_ids=requested_vehicle_ids,
+        vehicle_driver_ids=vehicle_driver_ids,
+        delivery_slot=delivery_slot,
     )
 
 
@@ -230,12 +348,7 @@ def edit_route_plan(*, route_plan, runs_payload, reviewed_by=None):
         route_state.stops = [candidate_by_stop_id[stop_id] for stop_id in item["stop_ids"]]
         route_state.load_kg = sum((candidate.demand.kg for candidate in route_state.stops), start=Decimal("0"))
         route_state.load_m3 = sum((candidate.demand.m3 for candidate in route_state.stops), start=Decimal("0"))
-        capacity_kg = Decimal(str(route_state.vehicle.capacity_kg or 0)) if route_state.vehicle else Decimal("0")
-        capacity_m3 = Decimal(str(route_state.vehicle.capacity_m3 or 0)) if route_state.vehicle else Decimal("0")
-        if capacity_kg and route_state.load_kg > capacity_kg:
-            raise ValidationError(f"El recorrido de {_run_label(run)} supera la capacidad en kg.")
-        if capacity_m3 and route_state.load_m3 > capacity_m3:
-            raise ValidationError(f"El recorrido de {_run_label(run)} supera la capacidad en m3.")
+        _validate_route_capacity(route_state, route_state.vehicle, run_label=_run_label(run))
         evaluation = _evaluate_route(route_state.stops, matrix, route_plan.dispatch_date)
         if not evaluation.feasible:
             raise ValidationError("La edicion propuesta no respeta las ventanas horarias vigentes.")
@@ -350,9 +463,9 @@ def edit_route_plan(*, route_plan, runs_payload, reviewed_by=None):
     return route_plan
 
 
-def _eligible_orders(distributor, dispatch_date, order_ids, include_draft_plan_ids=None):
+def _eligible_orders(distributor, dispatch_date, order_ids, include_draft_plan_ids=None, delivery_slot=None):
     queryset = (
-        Order.objects.select_related("commerce", "distributor")
+        Order.objects.select_related("commerce", "distributor", "delivery_slot")
         .prefetch_related("items", "items__product")
         .filter(
             distributor=distributor,
@@ -361,6 +474,8 @@ def _eligible_orders(distributor, dispatch_date, order_ids, include_draft_plan_i
         )
         .order_by("id")
     )
+    if delivery_slot is not None:
+        queryset = queryset.filter(delivery_slot=delivery_slot)
     if order_ids:
         queryset = queryset.filter(id__in=order_ids)
     active_delivery_statuses = [DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP, DeliveryStatus.ON_THE_WAY, DeliveryStatus.DELIVERED]
@@ -377,6 +492,15 @@ def _eligible_orders(distributor, dispatch_date, order_ids, include_draft_plan_i
     else:
         queryset = queryset.exclude(route_stops__route_run__route_plan__status=RoutePlanStatus.DRAFT)
     return queryset.distinct()
+
+
+def _resolve_delivery_slot(distributor, delivery_slot_id):
+    if delivery_slot_id in (None, ""):
+        return None
+    try:
+        return DistributorDeliverySlot.objects.get(pk=delivery_slot_id, distributor=distributor, active=True)
+    except DistributorDeliverySlot.DoesNotExist as exc:
+        raise ValidationError("Selecciona una franja activa de la distribuidora.") from exc
 
 
 def _eligible_drivers(distributor, driver_ids, vehicle_ids):
@@ -456,6 +580,16 @@ def _run_label(run):
     if run.driver_id:
         return run.driver.user.full_name
     return run.vehicle.plate
+
+
+def _validate_route_capacity(route_state, vehicle, run_label=None):
+    capacity_kg = Decimal(str(vehicle.capacity_kg or 0)) if vehicle else Decimal("0")
+    capacity_m3 = Decimal(str(vehicle.capacity_m3 or 0)) if vehicle else Decimal("0")
+    label = run_label or getattr(vehicle, "plate", "recorrido")
+    if capacity_kg and route_state.load_kg > capacity_kg:
+        raise ValidationError(f"El recorrido de {label} supera la capacidad en kg.")
+    if capacity_m3 and route_state.load_m3 > capacity_m3:
+        raise ValidationError(f"El recorrido de {label} supera la capacidad en m3.")
 
 
 def _build_candidates(orders, dispatch_date):
@@ -597,6 +731,7 @@ def _persist_route_plan(
     origin,
     requested_vehicle_ids=None,
     vehicle_driver_ids=None,
+    delivery_slot=None,
 ):
     active_routes = [route for route in routes if route.stops]
     superseded = [plan.id for plan in draft_plans]
@@ -604,6 +739,9 @@ def _persist_route_plan(
         distributor=distributor,
         dispatch_date=dispatch_date,
         generated_by=generated_by,
+        delivery_slot=delivery_slot,
+        delivery_window_start=getattr(delivery_slot, "start_time", None),
+        delivery_window_end=getattr(delivery_slot, "end_time", None),
         provider=routing_provider,
         routing_status=routing_status,
         route_geometry=_merge_route_geometries([route.route_geometry for route in active_routes]),
@@ -619,6 +757,8 @@ def _persist_route_plan(
             "routing_status": routing_status,
             "input": {
                 "dispatch_date": dispatch_date.isoformat(),
+                "delivery_slot_id": getattr(delivery_slot, "id", None),
+                "delivery_slot_name": getattr(delivery_slot, "name", ""),
                 "requested_order_ids": requested_order_ids or [],
                 "requested_vehicle_ids": requested_vehicle_ids or [],
                 "vehicle_driver_ids": vehicle_driver_ids or {},
@@ -720,45 +860,100 @@ def patch_route_plan_stops(*, route_plan, stops_payload, remove_stop_ids=None, r
         all_stops[stop_id].delete()
 
     remaining_stops = {stop_id: stop for stop_id, stop in all_stops.items() if stop_id not in remove_stop_ids}
-    submitted_ids = [item["id"] for item in stops_payload]
+    submitted_ids = [item["id"] for item in stops_payload if item.get("id")]
+    submitted_order_ids = [item["order_id"] for item in stops_payload if item.get("order_id")]
     if len(submitted_ids) != len(set(submitted_ids)):
         raise ValidationError("No puedes repetir paradas en la edicion.")
+    if len(submitted_order_ids) != len(set(submitted_order_ids)):
+        raise ValidationError("No puedes repetir pedidos nuevos dentro de la edicion.")
     if set(submitted_ids) != set(remaining_stops.keys()):
         raise ValidationError("Debes enviar todas las paradas restantes para recalcular la ruta.")
+    existing_order_ids = {stop.order_id for stop in remaining_stops.values()}
+    if existing_order_ids.intersection(submitted_order_ids):
+        raise ValidationError("Hay pedidos nuevos que ya pertenecen a la ruta.")
 
     runs = {run.id: run for run in route_plan.runs.select_related("driver", "vehicle").all()}
+    new_order_candidates = {}
+    if submitted_order_ids:
+        orders = list(
+            _eligible_orders(
+                distributor,
+                route_plan.dispatch_date,
+                submitted_order_ids,
+                include_draft_plan_ids=[route_plan.id],
+                delivery_slot=route_plan.delivery_slot,
+            )
+        )
+        if set(submitted_order_ids) - {order.id for order in orders}:
+            raise ValidationError("Hay pedidos que ya no estan disponibles para agregar a la ruta.")
+        candidates, unassigned = _build_candidates(orders, route_plan.dispatch_date)
+        if unassigned:
+            raise ValidationError("Hay pedidos nuevos sin coordenadas o sin carga fisica para rutear.")
+        new_order_candidates = {candidate.order.id: candidate for candidate in candidates}
+
     candidates = []
-    candidate_by_stop_id = {}
-    grouped_stop_ids = {run_id: [] for run_id in runs}
-    for item in sorted(stops_payload, key=lambda row: (row.get("route_run_id") or remaining_stops[row["id"]].route_run_id, row["sequence"])):
-        stop = remaining_stops[item["id"]]
-        run_id = item.get("route_run_id") or stop.route_run_id
+    candidate_by_key = {}
+    grouped_keys = {run_id: [] for run_id in runs}
+    for item in sorted(
+        stops_payload,
+        key=lambda row: (row.get("route_run_id") or (remaining_stops[row["id"]].route_run_id if row.get("id") else 0), row["sequence"]),
+    ):
+        is_existing_stop = bool(item.get("id"))
+        stop = remaining_stops[item["id"]] if is_existing_stop else None
+        run_id = item.get("route_run_id") or (stop.route_run_id if stop else None)
         if run_id not in runs:
             raise ValidationError("Hay paradas asignadas a un recorrido inexistente.")
-        latitude = item.get("lat", item.get("latitude", stop.latitude))
-        longitude = item.get("lng", item.get("longitude", stop.longitude))
-        if latitude is None or longitude is None:
-            latitude = getattr(stop.order.commerce, "latitude", None)
-            longitude = getattr(stop.order.commerce, "longitude", None)
-        if latitude is None or longitude is None:
-            raise ValidationError(f"El pedido #{stop.order_id} no tiene coordenadas validas.")
-        candidate = CandidateStop(
-            order=stop.order,
-            demand=Demand(kg=Decimal(str(stop.demand_kg)), m3=Decimal(str(stop.demand_m3))),
-            window_start_at=stop.window_start_at,
-            window_end_at=stop.window_end_at,
-            latitude=float(latitude),
-            longitude=float(longitude),
-            address_snapshot=stop.address_snapshot or _address_snapshot(stop.order),
-            matrix_index=len(candidates) + 1,
-        )
+        if is_existing_stop:
+            latitude = item.get("lat", item.get("latitude", stop.latitude))
+            longitude = item.get("lng", item.get("longitude", stop.longitude))
+            if latitude is None or longitude is None:
+                latitude = getattr(stop.order.commerce, "latitude", None)
+                longitude = getattr(stop.order.commerce, "longitude", None)
+            if latitude is None or longitude is None:
+                raise ValidationError(f"El pedido #{stop.order_id} no tiene coordenadas validas.")
+            candidate = CandidateStop(
+                order=stop.order,
+                demand=Demand(kg=Decimal(str(stop.demand_kg)), m3=Decimal(str(stop.demand_m3))),
+                window_start_at=stop.window_start_at,
+                window_end_at=stop.window_end_at,
+                latitude=float(latitude),
+                longitude=float(longitude),
+                address_snapshot=stop.address_snapshot or _address_snapshot(stop.order),
+                matrix_index=len(candidates) + 1,
+            )
+            key = ("stop", stop.id)
+        else:
+            candidate = new_order_candidates.get(item["order_id"])
+            if candidate is None:
+                raise ValidationError("Hay pedidos nuevos que no se pudieron preparar para la ruta.")
+            latitude = item.get("lat", item.get("latitude", candidate.latitude))
+            longitude = item.get("lng", item.get("longitude", candidate.longitude))
+            candidate = CandidateStop(
+                order=candidate.order,
+                demand=candidate.demand,
+                window_start_at=candidate.window_start_at,
+                window_end_at=candidate.window_end_at,
+                latitude=float(latitude),
+                longitude=float(longitude),
+                address_snapshot=candidate.address_snapshot,
+                matrix_index=len(candidates) + 1,
+            )
+            key = ("order", candidate.order.id)
         candidates.append(candidate)
-        candidate_by_stop_id[stop.id] = candidate
-        grouped_stop_ids[run_id].append(stop.id)
+        candidate_by_key[key] = candidate
+        grouped_keys[run_id].append(key)
 
-    matrix = _build_matrix(
-        origin=(origin["latitude"], origin["longitude"]),
-        destinations=[(candidate.latitude, candidate.longitude) for candidate in candidates],
+    matrix = (
+        _build_fallback_matrix(
+            (origin["latitude"], origin["longitude"]),
+            [(candidate.latitude, candidate.longitude) for candidate in candidates],
+            routing_status="manual",
+        )
+        if route_plan.provider == "manual"
+        else _build_matrix(
+            origin=(origin["latitude"], origin["longitude"]),
+            destinations=[(candidate.latitude, candidate.longitude) for candidate in candidates],
+        )
     )
 
     run_states = {}
@@ -766,15 +961,10 @@ def patch_route_plan_stops(*, route_plan, stops_payload, remove_stop_ids=None, r
         route_state = RouteState(driver=run.driver)
         route_state.vehicle = run.vehicle
         route_state.origin_snapshot = origin
-        route_state.stops = [candidate_by_stop_id[stop_id] for stop_id in grouped_stop_ids.get(run_id, [])]
+        route_state.stops = [candidate_by_key[key] for key in grouped_keys.get(run_id, [])]
         route_state.load_kg = sum((candidate.demand.kg for candidate in route_state.stops), start=Decimal("0"))
         route_state.load_m3 = sum((candidate.demand.m3 for candidate in route_state.stops), start=Decimal("0"))
-        capacity_kg = Decimal(str(route_state.vehicle.capacity_kg or 0)) if route_state.vehicle else Decimal("0")
-        capacity_m3 = Decimal(str(route_state.vehicle.capacity_m3 or 0)) if route_state.vehicle else Decimal("0")
-        if capacity_kg and route_state.load_kg > capacity_kg:
-            raise ValidationError(f"El recorrido de {_run_label(run)} supera la capacidad en kg.")
-        if capacity_m3 and route_state.load_m3 > capacity_m3:
-            raise ValidationError(f"El recorrido de {_run_label(run)} supera la capacidad en m3.")
+        _validate_route_capacity(route_state, route_state.vehicle, run_label=_run_label(run))
         evaluation = _evaluate_route(route_state.stops, matrix, route_plan.dispatch_date)
         if not evaluation.feasible:
             raise ValidationError("La edicion propuesta no respeta las ventanas horarias vigentes.")
@@ -816,8 +1006,17 @@ def patch_route_plan_stops(*, route_plan, stops_payload, remove_stop_ids=None, r
         )
         active_runs.append(run)
         next_sequence += 1
-        for stop_index, candidate in enumerate(route_state.stops, start=1):
-            stop = next(stop for stop in remaining_stops.values() if stop.order_id == candidate.order.id)
+        for stop_index, key in enumerate(grouped_keys.get(run_id, []), start=1):
+            candidate = candidate_by_key[key]
+            stop = remaining_stops[key[1]] if key[0] == "stop" else RouteStop(
+                route_run=run,
+                order=candidate.order,
+                status=RouteStopStatus.PENDING,
+                window_start_at=candidate.window_start_at,
+                window_end_at=candidate.window_end_at,
+                demand_kg=candidate.demand.kg,
+                demand_m3=candidate.demand.m3,
+            )
             stop.route_run = run
             stop.sequence = stop_index
             stop.planned_eta = route_state.stop_etas[stop_index - 1]
@@ -826,22 +1025,26 @@ def patch_route_plan_stops(*, route_plan, stops_payload, remove_stop_ids=None, r
             stop.latitude = Decimal(str(candidate.latitude)).quantize(Decimal("0.0000001"))
             stop.longitude = Decimal(str(candidate.longitude)).quantize(Decimal("0.0000001"))
             stop.address_snapshot = candidate.address_snapshot
-            stop.save(
-                update_fields=[
-                    "route_run",
-                    "sequence",
-                    "planned_eta",
-                    "leg_distance_km",
-                    "leg_duration_min",
-                    "latitude",
-                    "longitude",
-                    "address_snapshot",
-                    "updated_at",
-                ]
-            )
+            if key[0] == "stop":
+                stop.save(
+                    update_fields=[
+                        "route_run",
+                        "sequence",
+                        "planned_eta",
+                        "leg_distance_km",
+                        "leg_duration_min",
+                        "latitude",
+                        "longitude",
+                        "address_snapshot",
+                        "updated_at",
+                    ]
+                )
+            else:
+                stop.save()
+                _create_stop_lines(stop)
 
     route_plan.total_runs = len(active_runs)
-    route_plan.total_orders = len(remaining_stops)
+    route_plan.total_orders = sum((len(state.stops) for state in run_states.values() if state.stops), start=0)
     route_plan.total_distance_km = sum((state.total_distance_km for state in run_states.values() if state.stops), start=Decimal("0"))
     route_plan.total_duration_min = sum((state.total_duration_min for state in run_states.values() if state.stops), start=Decimal("0"))
     route_plan.total_load_kg = sum((state.load_kg for state in run_states.values() if state.stops), start=Decimal("0"))
@@ -886,8 +1089,9 @@ def patch_route_plan_stops(*, route_plan, stops_payload, remove_stop_ids=None, r
     return route_plan
 
 
-def pending_route_orders(*, distributor, dispatch_date):
-    orders = list(_eligible_orders(distributor, dispatch_date, order_ids=None))
+def pending_route_orders(*, distributor, dispatch_date, delivery_slot_id=None):
+    delivery_slot = _resolve_delivery_slot(distributor, delivery_slot_id)
+    orders = list(_eligible_orders(distributor, dispatch_date, order_ids=None, delivery_slot=delivery_slot))
     rows = []
     for order in orders:
         _refresh_order_capacity_from_master(order)
@@ -902,6 +1106,10 @@ def pending_route_orders(*, distributor, dispatch_date):
                 "commerce_name": commerce.trade_name,
                 "status": order.status,
                 "dispatch_date": order.dispatch_date.isoformat(),
+                "delivery_slot": order.delivery_slot_id,
+                "delivery_slot_name": getattr(order.delivery_slot, "name", "") if order.delivery_slot_id else "",
+                "delivery_window_start": None if order.delivery_window_start is None else order.delivery_window_start.isoformat(),
+                "delivery_window_end": None if order.delivery_window_end is None else order.delivery_window_end.isoformat(),
                 "delivery_address": order.delivery_address or commerce.address,
                 "address_snapshot": _address_snapshot(order),
                 "lat": None if commerce.latitude is None else str(commerce.latitude),

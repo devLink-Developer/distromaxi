@@ -41,12 +41,12 @@ class DeliveryRoutingMetadataTests(TestCase):
             address="Base",
             latitude=Decimal("-34.6037220"),
             longitude=Decimal("-58.3815920"),
-            plan_name="PRO",
+            plan_name="Pro",
             subscription_status="ACTIVE",
             active=True,
         )
         plan, _ = Plan.objects.update_or_create(
-            name="PRO",
+            name="Pro",
             defaults={"price": Decimal("1.00"), "description": "Pro", "currency": "ARS", "is_active": True, "sort_order": 1},
         )
         Subscription.objects.update_or_create(

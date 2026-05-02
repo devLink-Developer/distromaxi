@@ -7,6 +7,7 @@ from django.utils import timezone
 class OrderStatus(models.TextChoices):
     PENDING = "PENDING", "Pendiente"
     ACCEPTED = "ACCEPTED", "Aceptado"
+    REJECTED = "REJECTED", "Rechazado"
     PREPARING = "PREPARING", "Preparando"
     SCHEDULED = "SCHEDULED", "Programado"
     ON_THE_WAY = "ON_THE_WAY", "En camino"
@@ -24,6 +25,13 @@ class Order(models.Model):
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=OrderStatus.choices, default=OrderStatus.PENDING)
     dispatch_date = models.DateField(default=default_dispatch_date)
+    delivery_slot = models.ForeignKey(
+        "distributors.DistributorDeliverySlot",
+        on_delete=models.SET_NULL,
+        related_name="orders",
+        null=True,
+        blank=True,
+    )
     delivery_address = models.CharField(max_length=255)
     delivery_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
     delivery_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
@@ -38,6 +46,7 @@ class Order(models.Model):
         indexes = [
             models.Index(fields=["distributor", "created_at"]),
             models.Index(fields=["distributor", "status"]),
+            models.Index(fields=["distributor", "dispatch_date", "delivery_slot"]),
             models.Index(fields=["commerce", "created_at"]),
         ]
 

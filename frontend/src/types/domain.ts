@@ -10,6 +10,8 @@ export type DistributorAccess = {
   distributor_name: string | null
   plan_name: string | null
   routing_enabled: boolean
+  manual_routing_enabled?: boolean
+  automatic_routing_enabled?: boolean
 }
 
 export type User = {
@@ -50,11 +52,24 @@ export type Distributor = {
   active: boolean
 }
 
+export type DistributorDeliverySlot = {
+  id: number
+  distributor: number
+  name: string
+  start_time: string
+  end_time: string
+  active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
 export type Plan = {
   id: number
-  name: 'START' | 'PRO' | 'IA' | string
+  name: 'Standard' | 'Plus' | 'Pro' | string
   price: string
   description: string
+  features: string[]
   currency: string
   mp_subscription_url: string
   mp_preapproval_plan_id: string
@@ -256,6 +271,10 @@ export type Order = {
   total: string
   status: string
   dispatch_date: string
+  delivery_slot: number | null
+  delivery_slot_name?: string | null
+  delivery_slot_start_time?: string | null
+  delivery_slot_end_time?: string | null
   delivery_address: string
   delivery_latitude?: string | null
   delivery_longitude?: string | null
@@ -357,6 +376,10 @@ export type RoutePlan = {
   distributor: number
   distributor_name: string
   dispatch_date: string
+  delivery_slot: number | null
+  delivery_slot_name: string | null
+  delivery_window_start: string | null
+  delivery_window_end: string | null
   status: string
   provider: string
   routing_status: string
@@ -385,6 +408,10 @@ export type PendingRouteOrder = {
   commerce_name: string
   status: string
   dispatch_date: string
+  delivery_slot: number | null
+  delivery_slot_name: string
+  delivery_window_start: string | null
+  delivery_window_end: string | null
   delivery_address: string
   address_snapshot: Record<string, unknown>
   lat: string | null

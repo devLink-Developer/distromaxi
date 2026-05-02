@@ -11,6 +11,7 @@ class PlanSerializer(serializers.ModelSerializer):
             "name",
             "price",
             "description",
+            "features",
             "currency",
             "mp_subscription_url",
             "mp_preapproval_plan_id",

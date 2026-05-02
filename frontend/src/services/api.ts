@@ -4,6 +4,7 @@ import type {
   CurrentRoute,
   Delivery,
   Distributor,
+  DistributorDeliverySlot,
   DistributorOnboardingState,
   DistributorPlanSelectionResponse,
   DistributorSignupResponse,
@@ -33,6 +34,15 @@ const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: BodyInit | Record<string, unknown> | Array<unknown>
+}
+
+type RouteStopsPatchItem = {
+  id?: number
+  order_id?: number
+  route_run_id?: number
+  sequence: number
+  lat?: string
+  lng?: string
 }
 
 export class ApiError extends Error {
@@ -113,6 +123,7 @@ export const api = {
     }),
   distributors: () => apiFetch<Distributor[]>('/distributors/'),
   distributor: (id: string | number) => apiFetch<Distributor>(`/distributors/${id}/`),
+  deliverySlots: () => apiFetch<DistributorDeliverySlot[]>('/delivery-slots/'),
   products: (query = '') => apiFetch<Product[]>(`/products/${query}`),
   product: (id: string | number) => apiFetch<Product>(`/products/${id}/`),
   productSuppliers: () => apiFetch<ProductSupplier[]>('/product-suppliers/'),
@@ -127,25 +138,38 @@ export const api = {
   updateOrder: (id: number, body: Record<string, unknown>) => apiFetch<Order>(`/orders/${id}/`, { method: 'PATCH', body }),
   updateOrderStatus: (id: number, status: string) =>
     apiFetch<Order>(`/orders/${id}/status/`, { method: 'PATCH', body: { status } }),
+  decideOrder: (id: number, body: { decision: 'ACCEPT'; dispatch_date: string; delivery_slot_id: number } | { decision: 'REJECT' }) =>
+    apiFetch<Order>(`/orders/${id}/decision/`, { method: 'PATCH', body }),
   deliveries: () => apiFetch<Delivery[]>('/deliveries/'),
   delivery: (id: string | number) => apiFetch<Delivery>(`/deliveries/${id}/`),
   updateDeliveryLocation: (id: number, body: Record<string, unknown>) =>
     apiFetch<Delivery>(`/deliveries/${id}/location/`, { method: 'PATCH', body }),
-  routePlans: (dispatchDate?: string) => apiFetch<RoutePlan[]>(`/route-plans/${dispatchDate ? `?dispatch_date=${encodeURIComponent(dispatchDate)}` : ''}`),
+  routePlans: (dispatchDate?: string, deliverySlotId?: number | null) => {
+    const query = new URLSearchParams()
+    if (dispatchDate) query.set('dispatch_date', dispatchDate)
+    if (deliverySlotId) query.set('delivery_slot_id', String(deliverySlotId))
+    const suffix = query.toString()
+    return apiFetch<RoutePlan[]>(`/route-plans/${suffix ? `?${suffix}` : ''}`)
+  },
   routePlan: (id: number | string) => apiFetch<RoutePlan>(`/route-plans/${id}/`),
-  pendingRouteOrders: (dispatchDate: string) =>
-    apiFetch<PendingRouteOrder[]>(`/route-plans/pending-orders/?dispatch_date=${encodeURIComponent(dispatchDate)}`),
+  pendingRouteOrders: (dispatchDate: string, deliverySlotId?: number | null) => {
+    const query = new URLSearchParams({ dispatch_date: dispatchDate })
+    if (deliverySlotId) query.set('delivery_slot_id', String(deliverySlotId))
+    return apiFetch<PendingRouteOrder[]>(`/route-plans/pending-orders/?${query.toString()}`)
+  },
   generateRoutePlan: (body: Record<string, unknown>, idempotencyKey?: string) =>
     apiFetch<RoutePlan>('/route-plans/generate/', {
       method: 'POST',
       body,
       headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
     }),
+  createManualRoutePlan: (body: { dispatch_date: string; delivery_slot_id?: number | null; runs: Array<{ vehicle_id: number; driver_id?: number | null; order_ids: number[] }> }) =>
+    apiFetch<RoutePlan>('/route-plans/manual/', { method: 'POST', body }),
   editRoutePlan: (id: number, body: { runs: Array<{ id: number; stop_ids: number[] }> }) =>
     apiFetch<RoutePlan>(`/route-plans/${id}/edit/`, { method: 'POST', body }),
   patchRouteStops: (
     id: number,
-    body: { stops: Array<{ id: number; route_run_id?: number; sequence: number; lat?: string; lng?: string }>; remove_stop_ids?: number[] },
+    body: { stops: RouteStopsPatchItem[]; remove_stop_ids?: number[] },
   ) => apiFetch<RoutePlan>(`/route-plans/${id}/stops/`, { method: 'PATCH', body }),
   deleteRoutePlan: (id: number) => apiFetch<void>(`/route-plans/${id}/`, { method: 'DELETE' }),
   confirmRoutePlan: (id: number, body: Record<string, unknown> = {}) =>

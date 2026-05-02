@@ -44,6 +44,15 @@ class RoutePlan(models.Model):
         related_name="generated_route_plans",
     )
     total_runs = models.PositiveIntegerField(default=0)
+    delivery_slot = models.ForeignKey(
+        "distributors.DistributorDeliverySlot",
+        on_delete=models.SET_NULL,
+        related_name="route_plans",
+        null=True,
+        blank=True,
+    )
+    delivery_window_start = models.TimeField(null=True, blank=True)
+    delivery_window_end = models.TimeField(null=True, blank=True)
     total_orders = models.PositiveIntegerField(default=0)
     total_distance_km = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     total_duration_min = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -70,6 +79,7 @@ class RoutePlan(models.Model):
         ordering = ["-dispatch_date", "-created_at"]
         indexes = [
             models.Index(fields=["distributor", "dispatch_date"]),
+            models.Index(fields=["distributor", "dispatch_date", "delivery_slot"]),
             models.Index(fields=["distributor", "status"]),
             models.Index(fields=["distributor", "dispatch_date", "status"]),
             models.Index(fields=["status", "dispatch_date"]),

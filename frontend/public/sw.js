@@ -1,6 +1,6 @@
-const CACHE_NAME = 'distromax-v1'
+const CACHE_NAME = 'distromax-v2'
 const OFFLINE_URL = '/offline.html'
-const ASSETS = ['/', OFFLINE_URL, '/manifest.webmanifest', '/pwa-icon.svg']
+const ASSETS = ['/', OFFLINE_URL, '/manifest.webmanifest', '/pwa-icon.svg', '/pwa-icon-192.png', '/pwa-icon-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)))

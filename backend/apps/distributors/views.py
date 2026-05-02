@@ -16,10 +16,12 @@ from apps.distributors.services import (
     mark_onboarding_review,
     update_existing_subscription,
 )
+from apps.distributors.utils import filter_by_distributor, get_user_distributor
 from apps.users.serializers import UserSerializer
 
-from .models import Distributor, DistributorOnboarding, DistributorOnboardingStatus
+from .models import Distributor, DistributorDeliverySlot, DistributorOnboarding, DistributorOnboardingStatus
 from .serializers import (
+    DistributorDeliverySlotSerializer,
     DistributorOnboardingStateSerializer,
     DistributorSerializer,
     DistributorSignupSerializer,
@@ -49,6 +51,27 @@ class DistributorViewSet(viewsets.ModelViewSet):
         if owner is None:
             raise ValidationError({"owner": "Debes seleccionar el usuario distribuidor que sera duenio de la cuenta."})
         serializer.save(owner=owner)
+
+
+class DistributorDeliverySlotViewSet(viewsets.ModelViewSet):
+    serializer_class = DistributorDeliverySlotSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = DistributorDeliverySlot.objects.select_related("distributor")
+        user = self.request.user
+        if not (user.role == "DISTRIBUTOR" or user.role == "ADMIN" or user.is_superuser):
+            return queryset.none()
+        return filter_by_distributor(queryset, self.request.user)
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not (user.role == "DISTRIBUTOR" or user.role == "ADMIN" or user.is_superuser):
+            raise ValidationError({"detail": "Solo distribuidoras y administradores pueden configurar franjas."})
+        distributor = serializer.validated_data.get("distributor") if user.role == "ADMIN" or user.is_superuser else get_user_distributor(user)
+        if distributor is None:
+            raise ValidationError({"distributor": "No encontramos una distribuidora asociada."})
+        serializer.save(distributor=distributor)
 
 
 class DistributorSignupView(CreateAPIView):

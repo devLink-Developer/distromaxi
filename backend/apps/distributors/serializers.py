@@ -7,8 +7,9 @@ from apps.billing.serializers import PlanSerializer
 from apps.billing.models import Plan
 from apps.users.models import UserRole
 
-from .models import Distributor, DistributorOnboarding, DistributorOnboardingStatus
+from .models import Distributor, DistributorDeliverySlot, DistributorOnboarding, DistributorOnboardingStatus
 from .services import onboarding_snapshot_for_user
+from .utils import get_user_distributor
 
 User = get_user_model()
 
@@ -87,6 +88,46 @@ class DistributorSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Completa codigo postal, ciudad y provincia para guardar la direccion.")
         elif address and (latitude is None or longitude is None):
             raise serializers.ValidationError("Debes geolocalizar la direccion antes de guardarla.")
+        return attrs
+
+
+class DistributorDeliverySlotSerializer(serializers.ModelSerializer):
+    distributor = serializers.PrimaryKeyRelatedField(queryset=Distributor.objects.all(), required=False)
+
+    class Meta:
+        model = DistributorDeliverySlot
+        fields = [
+            "id",
+            "distributor",
+            "name",
+            "start_time",
+            "end_time",
+            "active",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+        extra_kwargs = {"distributor": {"required": False}}
+        validators = []
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        start_time = attrs.get("start_time", getattr(self.instance, "start_time", None))
+        end_time = attrs.get("end_time", getattr(self.instance, "end_time", None))
+        if start_time and end_time and start_time >= end_time:
+            raise serializers.ValidationError({"end_time": "La franja horaria es invalida."})
+        name = attrs.get("name", getattr(self.instance, "name", None))
+        distributor = attrs.get("distributor", getattr(self.instance, "distributor", None))
+        request = self.context.get("request")
+        if distributor is None and request is not None:
+            distributor = get_user_distributor(request.user)
+        if name and distributor is not None:
+            queryset = DistributorDeliverySlot.objects.filter(distributor=distributor, name__iexact=name)
+            if self.instance is not None:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            if queryset.exists():
+                raise serializers.ValidationError({"name": "Ya existe una franja con ese nombre."})
         return attrs
 
 

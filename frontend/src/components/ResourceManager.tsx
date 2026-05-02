@@ -399,13 +399,13 @@ export function ResourceManager({
 
       {showForm && (
         <div
-          className="fixed inset-0 z-50 grid place-items-end bg-slate-950/50 p-0 sm:place-items-center sm:p-4"
+          className="fixed inset-0 z-[1300] grid place-items-end bg-slate-950/50 p-0 sm:place-items-center sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby={formTitleId}
           aria-describedby={formDescriptionId}
         >
-          <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-lg bg-white p-4 shadow-soft sm:max-w-3xl sm:rounded-lg sm:p-5">
+          <div className="max-h-dvh w-full overflow-y-auto rounded-t-lg bg-white p-4 shadow-soft sm:max-h-[92dvh] sm:max-w-3xl sm:rounded-lg sm:p-5">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
               <div className="min-w-0">
                 <h2 id={formTitleId} className="text-xl font-800 text-slate-950">

@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '../components/AppLayout'
 import { FeedbackLayer } from '../components/FeedbackLayer'
+import { PwaInstallPrompt } from '../components/PwaInstallPrompt'
+import '../stores/pwaInstallStore'
 import {
   AdminDistributorsPage,
   AdminSubscriptionsPage,
@@ -10,6 +12,7 @@ import {
   BillingPage,
   CustomersManagerPage,
   DashboardPage,
+  DeliverySlotsManagerPage,
   DistributorProfilePage,
   DriversManagerPage,
   ImportsPage,
@@ -78,6 +81,7 @@ export function App() {
               <Route path="/dashboard/stock" element={<StockPage />} />
               <Route path="/dashboard/orders" element={<DashboardOrdersRoutingPage />} />
               <Route path="/dashboard/routing" element={<DashboardRoutingPage />} />
+              <Route path="/dashboard/delivery-slots" element={<DeliverySlotsManagerPage />} />
               <Route path="/dashboard/customers" element={<CustomersManagerPage />} />
               <Route path="/dashboard/profile" element={<DistributorProfilePage />} />
               <Route path="/dashboard/drivers" element={<DriversManagerPage />} />
@@ -100,6 +104,7 @@ export function App() {
           </Route>
         </Route>
       </Routes>
+      <PwaInstallPrompt />
       <FeedbackLayer />
     </>
   )

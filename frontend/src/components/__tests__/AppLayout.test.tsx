@@ -19,8 +19,10 @@ const distributorUser = {
     onboarding_id: 7,
     distributor_id: 3,
     distributor_name: 'Distribuidora Andina',
-    plan_name: 'PRO',
+    plan_name: 'Pro',
     routing_enabled: true,
+    manual_routing_enabled: true,
+    automatic_routing_enabled: true,
   },
 }
 

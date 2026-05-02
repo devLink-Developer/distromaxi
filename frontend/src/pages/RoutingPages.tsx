@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { DragEvent } from 'react'
 import type { LayerGroup, Map as LeafletMap } from 'leaflet'
 
 import { EmptyState } from '../components/EmptyState'
@@ -6,105 +7,473 @@ import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useFeedbackStore } from '../stores/feedbackStore'
-import type { DriverProfile, GeoJsonLine, GeoJsonMultiLine, Order, PendingRouteOrder, RoutePlan, RouteRun, RouteStop, Vehicle } from '../types/domain'
+import type {
+  DistributorDeliverySlot,
+  DriverProfile,
+  GeoJsonLine,
+  GeoJsonMultiLine,
+  Order,
+  PendingRouteOrder,
+  RoutePlan,
+  RouteRun,
+  RouteStop,
+  Vehicle,
+} from '../types/domain'
+
+type ManualRunsState = Record<string, number[]>
+
+type ManualDragPayload =
+  | { source: 'pending-order'; orderId: number }
+  | { source: 'manual-order'; orderId: number; fromVehicleId: number }
+  | { source: 'draft-stop'; stopId: number; fromRunId: number }
+
+type CapacityMetrics = {
+  loadKg: number
+  loadM3: number
+  capacityKg: number
+  capacityM3: number
+  kgPercent: number
+  m3Percent: number
+  overCapacity: boolean
+}
+
+type OrderScheduleDraft = {
+  dispatch_date: string
+  delivery_slot_id: number
+}
 
 export function DashboardOrdersRoutingPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [deliverySlots, setDeliverySlots] = useState<DistributorDeliverySlot[]>([])
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [dateFilter, setDateFilter] = useState('')
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [activeOrderId, setActiveOrderId] = useState<number | null>(null)
+  const [drafts, setDrafts] = useState<Record<number, OrderScheduleDraft>>({})
+  const [savingOrderId, setSavingOrderId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const showError = useFeedbackStore((state) => state.error)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const confirm = useFeedbackStore((state) => state.confirm)
+  const activeSlots = useMemo(
+    () => deliverySlots.filter((slot) => slot.active).sort((left, right) => left.sort_order - right.sort_order || left.start_time.localeCompare(right.start_time)),
+    [deliverySlots],
+  )
+  const visibleOrders = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase()
+    return orders.filter((order) => {
+      if (statusFilter !== 'ALL' && order.status !== statusFilter) return false
+      if (dateFilter && order.dispatch_date !== dateFilter) return false
+      if (!normalizedQuery) return true
+      return [String(order.id), order.commerce_name, order.distributor_name, order.delivery_address]
+        .filter(Boolean)
+        .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
+    })
+  }, [dateFilter, orders, query, statusFilter])
+  const metrics = useMemo(
+    () => ({
+      total: orders.length,
+      pending: orders.filter((order) => order.status === 'PENDING').length,
+      accepted: orders.filter((order) => ['ACCEPTED', 'PREPARING'].includes(order.status)).length,
+      rejected: orders.filter((order) => order.status === 'REJECTED').length,
+    }),
+    [orders],
+  )
 
   useEffect(() => {
-    void api
-      .orders()
-      .then(setOrders)
-      .catch((caught) => showError(caught instanceof Error ? caught.message : 'No se pudieron cargar los pedidos.'))
+    let disposed = false
+    async function load() {
+      setLoading(true)
+      try {
+        const [loadedOrders, loadedSlots] = await Promise.all([api.orders(), api.deliverySlots()])
+        if (disposed) return
+        setOrders(loadedOrders)
+        setDeliverySlots(loadedSlots)
+      } catch (caught) {
+        if (!disposed) showError(caught instanceof Error ? caught.message : 'No se pudieron cargar los pedidos.')
+      } finally {
+        if (!disposed) setLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      disposed = true
+    }
   }, [showError])
 
-  async function saveSchedule(order: Order, payload: Partial<Order>) {
+  function openSchedule(order: Order) {
+    const fallbackSlotId = order.delivery_slot ?? activeSlots[0]?.id ?? 0
+    setActiveOrderId((current) => (current === order.id ? null : order.id))
+    setDrafts((current) => ({
+      ...current,
+      [order.id]: {
+        dispatch_date: order.dispatch_date || defaultRouteDate(),
+        delivery_slot_id: fallbackSlotId,
+      },
+    }))
+    setActionError(null)
+  }
+
+  function updateDraft(orderId: number, patch: Partial<OrderScheduleDraft>) {
+    setDrafts((current) => ({
+      ...current,
+      [orderId]: {
+        dispatch_date: current[orderId]?.dispatch_date ?? defaultRouteDate(),
+        delivery_slot_id: current[orderId]?.delivery_slot_id ?? activeSlots[0]?.id ?? 0,
+        ...patch,
+      },
+    }))
+  }
+
+  async function acceptOrder(order: Order) {
+    const draft = drafts[order.id]
+    if (!draft?.dispatch_date || !draft.delivery_slot_id) {
+      setActionError('Selecciona fecha de entrega y franja para aceptar el pedido.')
+      return
+    }
+    setSavingOrderId(order.id)
+    setActionError(null)
     try {
-      const updated = await api.updateOrder(order.id, payload as Record<string, unknown>)
+      const updated = await api.decideOrder(order.id, {
+        decision: 'ACCEPT',
+        dispatch_date: draft.dispatch_date,
+        delivery_slot_id: draft.delivery_slot_id,
+      })
       setOrders((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setActiveOrderId(null)
+      showSuccess('Pedido aceptado y coordinado.')
     } catch (caught) {
-      showError(caught instanceof Error ? caught.message : 'No se pudo guardar la programacion.')
+      const message = caught instanceof Error ? caught.message : 'No se pudo aceptar el pedido.'
+      setActionError(message)
+      showError(message)
+    } finally {
+      setSavingOrderId(null)
     }
   }
 
-  async function updateStatus(order: Order, status: string) {
+  async function saveSchedule(order: Order) {
+    const draft = drafts[order.id]
+    if (!draft?.dispatch_date || !draft.delivery_slot_id) {
+      setActionError('Selecciona fecha de entrega y franja para guardar la agenda.')
+      return
+    }
+    setSavingOrderId(order.id)
+    setActionError(null)
     try {
-      const updated = await api.updateOrderStatus(order.id, status)
+      const updated = await api.updateOrder(order.id, {
+        dispatch_date: draft.dispatch_date,
+        delivery_slot: draft.delivery_slot_id,
+      })
       setOrders((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setActiveOrderId(null)
+      showSuccess('Agenda de entrega actualizada.')
     } catch (caught) {
-      showError(caught instanceof Error ? caught.message : 'No se pudo actualizar el estado.')
+      const message = caught instanceof Error ? caught.message : 'No se pudo guardar la agenda.'
+      setActionError(message)
+      showError(message)
+    } finally {
+      setSavingOrderId(null)
+    }
+  }
+
+  async function rejectOrder(order: Order) {
+    const confirmed = await confirm({
+      title: 'Rechazar pedido',
+      message: `El pedido #${order.id} quedara rechazado y se liberara el stock reservado.`,
+      confirmLabel: 'Rechazar',
+      cancelLabel: 'Cancelar',
+      tone: 'danger',
+    })
+    if (!confirmed) return
+    setSavingOrderId(order.id)
+    setActionError(null)
+    try {
+      const updated = await api.decideOrder(order.id, { decision: 'REJECT' })
+      setOrders((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setActiveOrderId(null)
+      showSuccess('Pedido rechazado.')
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'No se pudo rechazar el pedido.'
+      setActionError(message)
+      showError(message)
+    } finally {
+      setSavingOrderId(null)
     }
   }
 
   return (
-    <section className="grid gap-4">
-      <div>
-        <h1 className="text-2xl font-800 text-slate-950">Gestion de pedidos</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Ajusta fecha y franja antes de generar rutas. El ruteo toma estos datos como restriccion operativa.</p>
+    <section className="grid gap-5">
+      <div className="grid gap-4 border-b border-slate-200 pb-5 xl:grid-cols-[1fr_auto] xl:items-end">
+        <div className="max-w-3xl">
+          <h1 className="text-2xl font-800 text-slate-950">Gestion de pedidos</h1>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Revisa articulos, acepta o rechaza pedidos y coordina fecha de entrega con una franja configurada por la distribuidora.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <OrderMetric label="Total" value={metrics.total} />
+          <OrderMetric label="Pendientes" value={metrics.pending} />
+          <OrderMetric label="Aceptados" value={metrics.accepted} />
+          <OrderMetric label="Rechazados" value={metrics.rejected} />
+        </div>
       </div>
-      {orders.map((order) => (
-        <article key={order.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-          <div className="flex flex-wrap justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-800 text-slate-950">Pedido #{order.id}</h2>
-              <p className="text-sm text-slate-600">
-                {order.commerce_name} - ${Number(order.total).toLocaleString('es-AR')}
-              </p>
-            </div>
-            <StatusBadge status={order.status} />
-          </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <label className="grid gap-1 text-sm font-700 text-slate-700">
-              Fecha de reparto
-              <input
-                className="min-h-10 rounded-md border border-slate-300 px-3"
-                type="date"
-                defaultValue={order.dispatch_date}
-                onBlur={(event) => void saveSchedule(order, { dispatch_date: event.target.value })}
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-700 text-slate-700">
-              Franja desde
-              <input
-                className="min-h-10 rounded-md border border-slate-300 px-3"
-                type="time"
-                defaultValue={order.delivery_window_start ?? ''}
-                onBlur={(event) => void saveSchedule(order, { delivery_window_start: event.target.value || null })}
-              />
-            </label>
-            <label className="grid gap-1 text-sm font-700 text-slate-700">
-              Franja hasta
-              <input
-                className="min-h-10 rounded-md border border-slate-300 px-3"
-                type="time"
-                defaultValue={order.delivery_window_end ?? ''}
-                onBlur={(event) => void saveSchedule(order, { delivery_window_end: event.target.value || null })}
-              />
-            </label>
-          </div>
+      <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+        <div className="grid gap-3 lg:grid-cols-[10rem_11rem_minmax(0,1fr)] lg:items-end">
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Estado
+            <select className="min-h-11 rounded-md border border-slate-300 bg-white px-3" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="ALL">Todos</option>
+              {['PENDING', 'ACCEPTED', 'PREPARING', 'SCHEDULED', 'ON_THE_WAY', 'DELIVERED', 'REJECTED', 'CANCELLED'].map((status) => (
+                <option key={status} value={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Fecha de entrega
+            <input className="min-h-11 rounded-md border border-slate-300 px-3" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Cliente o pedido
+            <input
+              className="min-h-11 rounded-md border border-slate-300 px-3"
+              type="search"
+              value={query}
+              placeholder="Buscar por cliente, direccion o numero"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
+        {activeSlots.length === 0 ? (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-700 text-amber-900">
+            No hay franjas activas. Configuralas en Franjas para poder aceptar pedidos con agenda.
+          </p>
+        ) : null}
+      </section>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {['ACCEPTED', 'PREPARING', 'SCHEDULED', 'ON_THE_WAY', 'DELIVERED', 'CANCELLED'].map((status) => (
-              <button
-                key={status}
-                className="min-h-10 rounded-md border border-slate-300 px-3 text-xs font-800 text-slate-700"
-                type="button"
-                onClick={() => void updateStatus(order, status)}
-              >
-                {status}
-              </button>
+      {loading ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando pedidos...</div>
+      ) : visibleOrders.length === 0 ? (
+        <EmptyState title="Sin pedidos con estos filtros" text="Ajusta estado, fecha o busqueda para revisar la gestion comercial." />
+      ) : (
+        <>
+          <section className="hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft lg:block">
+            <table className="w-full table-fixed border-collapse text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-800 uppercase text-slate-500">
+                <tr>
+                  <th className="w-[13rem] px-4 py-3">Pedido</th>
+                  <th className="px-4 py-3">Articulos</th>
+                  <th className="w-[13rem] px-4 py-3">Entrega</th>
+                  <th className="w-[9rem] px-4 py-3">Total</th>
+                  <th className="w-[18rem] px-4 py-3">Gestion</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {visibleOrders.map((order) => (
+                  <tr key={order.id} className="align-top">
+                    <td className="px-4 py-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-800 text-slate-950">#{order.id}</p>
+                          <p className="mt-1 line-clamp-2 text-slate-600">{order.commerce_name}</p>
+                        </div>
+                        <StatusBadge status={order.status} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <OrderItemsList order={order} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <p className="font-800 text-slate-950">{formatOrderDate(order.dispatch_date)}</p>
+                      <p className="mt-1 text-slate-600">{deliverySlotSummary(order)}</p>
+                      <p className="mt-1 line-clamp-2 text-xs font-700 text-slate-500">{order.delivery_address}</p>
+                    </td>
+                    <td className="px-4 py-4 font-800 text-slate-950">{formatMoney(order.total)}</td>
+                    <td className="px-4 py-4">
+                      <OrderDecisionControls
+                        active={activeOrderId === order.id}
+                        activeSlots={activeSlots}
+                        draft={drafts[order.id]}
+                        error={activeOrderId === order.id ? actionError : null}
+                        order={order}
+                        saving={savingOrderId === order.id}
+                        onAccept={() => void acceptOrder(order)}
+                        onOpen={() => openSchedule(order)}
+                        onReject={() => void rejectOrder(order)}
+                        onSaveSchedule={() => void saveSchedule(order)}
+                        onUpdateDraft={(patch) => updateDraft(order.id, patch)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="grid gap-3 lg:hidden">
+            {visibleOrders.map((order) => (
+              <article key={order.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-800 text-slate-950">Pedido #{order.id}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{order.commerce_name}</p>
+                  </div>
+                  <StatusBadge status={order.status} />
+                </div>
+                <OrderItemsList order={order} />
+                <div className="grid gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
+                  <p className="font-800 text-slate-950">{formatMoney(order.total)}</p>
+                  <p className="text-slate-600">
+                    {formatOrderDate(order.dispatch_date)} - {deliverySlotSummary(order)}
+                  </p>
+                  <p className="line-clamp-2 text-xs font-700 text-slate-500">{order.delivery_address}</p>
+                </div>
+                <OrderDecisionControls
+                  active={activeOrderId === order.id}
+                  activeSlots={activeSlots}
+                  draft={drafts[order.id]}
+                  error={activeOrderId === order.id ? actionError : null}
+                  order={order}
+                  saving={savingOrderId === order.id}
+                  onAccept={() => void acceptOrder(order)}
+                  onOpen={() => openSchedule(order)}
+                  onReject={() => void rejectOrder(order)}
+                  onSaveSchedule={() => void saveSchedule(order)}
+                  onUpdateDraft={(patch) => updateDraft(order.id, patch)}
+                />
+              </article>
             ))}
-          </div>
-        </article>
-      ))}
+          </section>
+        </>
+      )}
     </section>
+  )
+}
+
+function OrderMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-right">
+      <p className="text-[11px] font-800 uppercase text-slate-500">{label}</p>
+      <p className="text-lg font-800 text-slate-950">{value}</p>
+    </div>
+  )
+}
+
+function OrderItemsList({ order }: { order: Order }) {
+  if (order.items.length === 0) {
+    return <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-700 text-slate-500">Sin articulos cargados.</p>
+  }
+  return (
+    <div className="grid gap-2">
+      {order.items.map((item) => (
+        <div key={item.id} className="grid gap-1 rounded-md bg-slate-50 px-3 py-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="font-800 text-slate-950">{item.product_name}</p>
+            <p className="text-xs font-800 text-slate-600">{formatMoney(item.subtotal)}</p>
+          </div>
+          <p className="text-xs font-700 text-slate-500">
+            {item.sku ? `SKU ${item.sku} - ` : ''}{formatQuantity(item.quantity)} u. x {formatMoney(item.price)}
+          </p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function OrderDecisionControls({
+  order,
+  active,
+  draft,
+  activeSlots,
+  saving,
+  error,
+  onOpen,
+  onUpdateDraft,
+  onAccept,
+  onReject,
+  onSaveSchedule,
+}: {
+  order: Order
+  active: boolean
+  draft: OrderScheduleDraft | undefined
+  activeSlots: DistributorDeliverySlot[]
+  saving: boolean
+  error: string | null
+  onOpen: () => void
+  onUpdateDraft: (patch: Partial<OrderScheduleDraft>) => void
+  onAccept: () => void
+  onReject: () => void
+  onSaveSchedule: () => void
+}) {
+  const canDecide = order.status === 'PENDING'
+  const canAdjust = ['ACCEPTED', 'PREPARING'].includes(order.status)
+  const controlsDisabled = saving || activeSlots.length === 0
+
+  if (!canDecide && !canAdjust) {
+    return <p className="rounded-md bg-slate-50 px-3 py-2 text-xs font-700 text-slate-500">Sin acciones comerciales para este estado.</p>
+  }
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap gap-2">
+        <button className="min-h-11 rounded-md bg-slate-950 px-4 text-sm font-800 text-white disabled:opacity-60" type="button" disabled={activeSlots.length === 0} onClick={onOpen}>
+          {active ? 'Cerrar' : canDecide ? 'Aceptar pedido' : 'Ajustar entrega'}
+        </button>
+        {canDecide ? (
+          <button className="min-h-11 rounded-md border border-red-200 px-4 text-sm font-800 text-red-700 disabled:opacity-60" type="button" disabled={saving} onClick={onReject}>
+            Rechazar
+          </button>
+        ) : null}
+      </div>
+
+      {active ? (
+        <div className="grid gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <label className="grid gap-1 text-xs font-800 text-slate-600">
+            Fecha de entrega
+            <input
+              className="min-h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-700 text-slate-800"
+              type="date"
+              value={draft?.dispatch_date ?? ''}
+              onChange={(event) => onUpdateDraft({ dispatch_date: event.target.value })}
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-800 text-slate-600">
+            Franja horaria
+            <select
+              className="min-h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-700 text-slate-800"
+              value={draft?.delivery_slot_id || ''}
+              onChange={(event) => onUpdateDraft({ delivery_slot_id: Number(event.target.value) })}
+            >
+              <option value="">Seleccionar franja</option>
+              {activeSlots.map((slot) => (
+                <option key={slot.id} value={slot.id}>
+                  {deliverySlotLabel(slot)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {error ? <p className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-800 text-red-700">{error}</p> : null}
+          <button
+            className="min-h-11 rounded-md bg-brand-600 px-4 text-sm font-800 text-white disabled:opacity-60"
+            type="button"
+            disabled={controlsDisabled}
+            onClick={canDecide ? onAccept : onSaveSchedule}
+          >
+            {saving ? 'Guardando...' : canDecide ? 'Confirmar aceptacion' : 'Guardar entrega'}
+          </button>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
 export function DashboardRoutingPage() {
   const [dispatchDate, setDispatchDate] = useState(defaultRouteDate())
+  const [deliverySlots, setDeliverySlots] = useState<DistributorDeliverySlot[]>([])
+  const [selectedDeliverySlotId, setSelectedDeliverySlotId] = useState<number | null>(null)
   const [routePlans, setRoutePlans] = useState<RoutePlan[]>([])
   const [pendingOrders, setPendingOrders] = useState<PendingRouteOrder[]>([])
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([])
@@ -112,6 +481,7 @@ export function DashboardRoutingPage() {
   const [drivers, setDrivers] = useState<DriverProfile[]>([])
   const [selectedVehicleIds, setSelectedVehicleIds] = useState<number[]>([])
   const [selectedDriverByVehicleId, setSelectedDriverByVehicleId] = useState<Record<string, number>>({})
+  const [manualRuns, setManualRuns] = useState<ManualRunsState>({})
   const [loading, setLoading] = useState(true)
   const [fleetLoading, setFleetLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -122,23 +492,56 @@ export function DashboardRoutingPage() {
   const showSuccess = useFeedbackStore((state) => state.success)
   const showError = useFeedbackStore((state) => state.error)
   const confirm = useFeedbackStore((state) => state.confirm)
-  const routingEnabled = user?.role === 'DISTRIBUTOR' ? user.distributor_access.routing_enabled !== false : true
+  const manualRoutingEnabled = user?.role === 'DISTRIBUTOR' ? (user.distributor_access.manual_routing_enabled ?? user.distributor_access.routing_enabled) !== false : true
+  const automaticRoutingEnabled =
+    user?.role === 'DISTRIBUTOR'
+      ? (user.distributor_access.automatic_routing_enabled ?? ['Pro', 'PRO', 'IA'].includes(String(user.distributor_access.plan_name))) === true
+      : true
+  const routingEnabled = manualRoutingEnabled || automaticRoutingEnabled
   const activePlan = useMemo(() => routePlans.find((plan) => plan.status === 'DRAFT') ?? routePlans[0], [routePlans])
   const mapPlan = activePlan && editingPlanId === activePlan.id ? { ...activePlan, runs: draftRuns } : activePlan
+  const activeDeliverySlots = useMemo(
+    () => deliverySlots.filter((slot) => slot.active).sort((left, right) => left.sort_order - right.sort_order || left.start_time.localeCompare(right.start_time)),
+    [deliverySlots],
+  )
+  const selectedDeliverySlot = useMemo(() => activeDeliverySlots.find((slot) => slot.id === selectedDeliverySlotId) ?? null, [activeDeliverySlots, selectedDeliverySlotId])
   const availableDrivers = useMemo(() => drivers.filter((driver) => driver.active && driver.available), [drivers])
   const selectableVehicles = useMemo(() => vehicles.filter(isVehicleSelectable), [vehicles])
   const selectableVehicleIdSet = useMemo(() => new Set(selectableVehicles.map((vehicle) => vehicle.id)), [selectableVehicles])
   const selectedVehicles = useMemo(() => vehicles.filter((vehicle) => selectedVehicleIds.includes(vehicle.id)), [vehicles, selectedVehicleIds])
   const selectedCapacity = useMemo(() => selectedVehicles.reduce(sumVehicleCapacity, { kg: 0, m3: 0 }), [selectedVehicles])
-  const canGenerate = !loading && !fleetLoading && !generating && selectedVehicleIds.some((id) => selectableVehicleIdSet.has(id))
+  const pendingOrderById = useMemo(() => new Map(pendingOrders.map((order) => [order.id, order])), [pendingOrders])
+  const manualOrderCount = useMemo(() => Object.values(manualRuns).reduce((total, orderIds) => total + orderIds.length, 0), [manualRuns])
+  const manualCapacityWarning = useMemo(
+    () => selectedVehicles.some((vehicle) => manualRunMetrics(vehicle, manualRuns[String(vehicle.id)] ?? [], pendingOrderById).overCapacity),
+    [manualRuns, pendingOrderById, selectedVehicles],
+  )
+  const canGenerate = automaticRoutingEnabled && Boolean(selectedDeliverySlotId) && !loading && !fleetLoading && !generating && selectedVehicleIds.some((id) => selectableVehicleIdSet.has(id))
+  const canCreateManual =
+    manualRoutingEnabled &&
+    Boolean(selectedDeliverySlotId) &&
+    !loading &&
+    !fleetLoading &&
+    !generating &&
+    manualOrderCount > 0 &&
+    !manualCapacityWarning &&
+    selectedVehicleIds.some((id) => selectableVehicleIdSet.has(id))
 
-  async function load(date = dispatchDate) {
+  async function load(date = dispatchDate, deliverySlotId = selectedDeliverySlotId) {
+    if (!deliverySlotId) {
+      setLoading(false)
+      setRoutePlans([])
+      setPendingOrders([])
+      setSelectedOrderIds([])
+      setManualRuns({})
+      return
+    }
     setLoading(true)
     try {
-      const [plans, pending] = await Promise.all([api.routePlans(date), api.pendingRouteOrders(date)])
+      const [plans, pending] = await Promise.all([api.routePlans(date, deliverySlotId), api.pendingRouteOrders(date, deliverySlotId)])
       setRoutePlans(plans)
       setPendingOrders(pending)
-      setSelectedOrderIds(pending.filter((order) => order.routable).map((order) => order.id))
+      setSelectedOrderIds(automaticRoutingEnabled ? pending.filter((order) => order.routable).map((order) => order.id) : [])
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudieron cargar las rutas.')
     } finally {
@@ -147,8 +550,8 @@ export function DashboardRoutingPage() {
   }
 
   useEffect(() => {
-    if (routingEnabled) void load(dispatchDate)
-  }, [dispatchDate, routingEnabled])
+    if (routingEnabled) void load(dispatchDate, selectedDeliverySlotId)
+  }, [automaticRoutingEnabled, dispatchDate, routingEnabled, selectedDeliverySlotId])
 
   useEffect(() => {
     if (!routingEnabled) return
@@ -156,10 +559,11 @@ export function DashboardRoutingPage() {
     async function loadFleet() {
       setFleetLoading(true)
       try {
-        const [loadedVehicles, loadedDrivers] = await Promise.all([api.vehicles(), api.drivers()])
+        const [loadedVehicles, loadedDrivers, loadedDeliverySlots] = await Promise.all([api.vehicles(), api.drivers(), api.deliverySlots()])
         if (disposed) return
         setVehicles(loadedVehicles)
         setDrivers(loadedDrivers)
+        setDeliverySlots(loadedDeliverySlots)
         const nextSelectableIds = loadedVehicles.filter(isVehicleSelectable).map((vehicle) => vehicle.id)
         const availableDriverIds = loadedDrivers.filter((driver) => driver.active && driver.available).map((driver) => driver.id)
         setSelectedVehicleIds((current) => current.filter((id) => nextSelectableIds.includes(id)))
@@ -179,6 +583,21 @@ export function DashboardRoutingPage() {
       disposed = true
     }
   }, [routingEnabled, showError])
+
+  useEffect(() => {
+    setManualRuns((current) => {
+      const selected = new Set(selectedVehicleIds.map(String))
+      const next = Object.fromEntries(
+        Object.entries(current)
+          .filter(([vehicleId]) => selected.has(vehicleId))
+          .map(([vehicleId, orderIds]) => [vehicleId, orderIds.filter((orderId) => pendingOrderById.has(orderId))]),
+      ) as ManualRunsState
+      selectedVehicleIds.forEach((vehicleId) => {
+        next[String(vehicleId)] = next[String(vehicleId)] ?? []
+      })
+      return next
+    })
+  }, [pendingOrderById, selectedVehicleIds])
 
   function startEditing(plan: RoutePlan) {
     setEditingPlanId(plan.id)
@@ -202,6 +621,11 @@ export function DashboardRoutingPage() {
     setSelectedVehicleIds((current) => (checked ? Array.from(new Set([...current, vehicle.id])) : current.filter((id) => id !== vehicle.id)))
     if (!checked) {
       setSelectedDriverByVehicleId((current) => {
+        const next = { ...current }
+        delete next[String(vehicle.id)]
+        return next
+      })
+      setManualRuns((current) => {
         const next = { ...current }
         delete next[String(vehicle.id)]
         return next
@@ -234,26 +658,31 @@ export function DashboardRoutingPage() {
         if (nextIndex < 0 || nextIndex >= run.stops.length) return run
         const stops = [...run.stops]
         ;[stops[stopIndex], stops[nextIndex]] = [stops[nextIndex], stops[stopIndex]]
-        return { ...run, stops: resequenceStops(stops), total_stops: stops.length }
+        return recalculateRun({ ...run, stops: resequenceStops(stops) })
       }),
     )
   }
 
-  function moveStopToRun(stopId: number, fromRunId: number, toRunId: number) {
-    if (fromRunId === toRunId) return
+  function moveStopToRun(stopId: number, fromRunId: number, toRunId: number, insertIndex?: number) {
     setDraftRuns((current) => {
       const source = current.find((run) => run.id === fromRunId)
       const destination = current.find((run) => run.id === toRunId)
       const stop = source?.stops.find((item) => item.id === stopId)
       if (!source || !destination || !stop) return current
+      if (fromRunId === toRunId) {
+        const nextStops = source.stops.filter((item) => item.id !== stopId)
+        nextStops.splice(resolveInsertIndex(insertIndex, nextStops.length), 0, stop)
+        return current.map((run) => (run.id === fromRunId ? recalculateRun({ ...run, stops: resequenceStops(nextStops) }) : run))
+      }
       return current.map((run) => {
         if (run.id === fromRunId) {
           const stops = resequenceStops(source.stops.filter((item) => item.id !== stopId))
-          return { ...run, stops, total_stops: stops.length }
+          return recalculateRun({ ...run, stops })
         }
         if (run.id === toRunId) {
-          const stops = resequenceStops([...destination.stops, stop])
-          return { ...run, stops, total_stops: stops.length }
+          const stops = [...destination.stops]
+          stops.splice(resolveInsertIndex(insertIndex, stops.length), 0, stop)
+          return recalculateRun({ ...run, stops: resequenceStops(stops) })
         }
         return run
       })
@@ -261,14 +690,93 @@ export function DashboardRoutingPage() {
   }
 
   function removeStop(stopId: number, runId: number) {
-    setRemovedStopIds((current) => (current.includes(stopId) ? current : [...current, stopId]))
+    if (stopId > 0) setRemovedStopIds((current) => (current.includes(stopId) ? current : [...current, stopId]))
     setDraftRuns((current) =>
       current.map((run) => {
         if (run.id !== runId) return run
         const stops = resequenceStops(run.stops.filter((stop) => stop.id !== stopId))
-        return { ...run, stops, total_stops: stops.length }
+        return recalculateRun({ ...run, stops })
       }),
     )
+  }
+
+  function addPendingOrderToDraftRun(orderId: number, toRunId: number, insertIndex?: number) {
+    const order = pendingOrderById.get(orderId)
+    if (!order?.routable) return
+    setDraftRuns((current) => {
+      if (current.some((run) => run.stops.some((stop) => stop.order === orderId))) return current
+      return current.map((run) => {
+        if (run.id !== toRunId) return run
+        const stops = [...run.stops]
+        stops.splice(resolveInsertIndex(insertIndex, stops.length), 0, pendingOrderToStop(order))
+        return recalculateRun({ ...run, stops: resequenceStops(stops) })
+      })
+    })
+  }
+
+  function handleDraftStopDrop(event: DragEvent, toRunId: number, insertIndex?: number) {
+    const payload = readDragPayload(event)
+    if (!payload) return
+    event.preventDefault()
+    if (payload.source === 'draft-stop') moveStopToRun(payload.stopId, payload.fromRunId, toRunId, insertIndex)
+    if (payload.source === 'pending-order') addPendingOrderToDraftRun(payload.orderId, toRunId, insertIndex)
+  }
+
+  function assignManualOrder(orderId: number, vehicleId: number, insertIndex?: number) {
+    const order = pendingOrderById.get(orderId)
+    if (!order?.routable || !selectedVehicleIds.includes(vehicleId)) return
+    setManualRuns((current) => {
+      const next = Object.fromEntries(Object.entries(current).map(([currentVehicleId, orderIds]) => [currentVehicleId, orderIds.filter((id) => id !== orderId)])) as ManualRunsState
+      const key = String(vehicleId)
+      const target = [...(next[key] ?? [])]
+      target.splice(resolveInsertIndex(insertIndex, target.length), 0, orderId)
+      next[key] = target
+      return next
+    })
+  }
+
+  function moveManualOrder(orderId: number, fromVehicleId: number, toVehicleId: number, insertIndex?: number) {
+    if (!selectedVehicleIds.includes(toVehicleId)) return
+    setManualRuns((current) => {
+      const next = Object.fromEntries(Object.entries(current).map(([vehicleId, orderIds]) => [vehicleId, orderIds.filter((id) => id !== orderId)])) as ManualRunsState
+      const key = String(toVehicleId)
+      const target = [...(next[key] ?? [])]
+      target.splice(resolveInsertIndex(insertIndex, target.length), 0, orderId)
+      next[key] = target
+      next[String(fromVehicleId)] = next[String(fromVehicleId)] ?? []
+      return next
+    })
+  }
+
+  function reorderManualOrder(vehicleId: number, orderId: number, direction: -1 | 1) {
+    setManualRuns((current) => {
+      const key = String(vehicleId)
+      const orders = [...(current[key] ?? [])]
+      const index = orders.indexOf(orderId)
+      const nextIndex = index + direction
+      if (index < 0 || nextIndex < 0 || nextIndex >= orders.length) return current
+      ;[orders[index], orders[nextIndex]] = [orders[nextIndex], orders[index]]
+      return { ...current, [key]: orders }
+    })
+  }
+
+  function removeManualOrder(orderId: number, vehicleId: number) {
+    setManualRuns((current) => {
+      const key = String(vehicleId)
+      return { ...current, [key]: (current[key] ?? []).filter((id) => id !== orderId) }
+    })
+  }
+
+  function clearManualRun(vehicleId: number) {
+    setManualRuns((current) => ({ ...current, [String(vehicleId)]: [] }))
+  }
+
+  function handlePendingDrop(event: DragEvent) {
+    const payload = readDragPayload(event)
+    if (!payload) return
+    event.preventDefault()
+    if (payload.source === 'manual-order') removeManualOrder(payload.orderId, payload.fromVehicleId)
+    if (payload.source === 'draft-stop') removeStop(payload.stopId, payload.fromRunId)
   }
 
   function moveDraftStopCoordinate(stopId: number, point: { latitude: number; longitude: number }) {
@@ -283,6 +791,10 @@ export function DashboardRoutingPage() {
   }
 
   async function generate() {
+    if (!selectedDeliverySlotId) {
+      showError('Selecciona una franja horaria antes de generar rutas.')
+      return
+    }
     const vehicleIds = selectedVehicleIds.filter((id) => selectableVehicleIdSet.has(id))
     if (vehicleIds.length === 0) {
       showError('Selecciona al menos un vehiculo activo con capacidad cargada.')
@@ -290,20 +802,58 @@ export function DashboardRoutingPage() {
     }
     setGenerating(true)
     try {
-      const payload: Record<string, unknown> = { dispatch_date: dispatchDate }
+      const payload: Record<string, unknown> = { dispatch_date: dispatchDate, delivery_slot_id: selectedDeliverySlotId }
       if (selectedOrderIds.length > 0) payload.order_ids = selectedOrderIds
       payload.vehicle_ids = vehicleIds
       const vehicleDriverIds = Object.fromEntries(Object.entries(selectedDriverByVehicleId).filter(([vehicleId]) => vehicleIds.includes(Number(vehicleId))))
       if (Object.keys(vehicleDriverIds).length > 0) payload.vehicle_driver_ids = vehicleDriverIds
-      const draft = await api.generateRoutePlan(payload, `route-preview-${dispatchDate}-${Date.now()}`)
-      setRoutePlans((current) => [draft, ...current.filter((item) => item.id !== draft.id)])
+      const draft = await api.generateRoutePlan(payload, `route-preview-${dispatchDate}-${selectedDeliverySlotId}-${Date.now()}`)
+      setRoutePlans((current) => [draft, ...current.filter((item) => item.id !== draft.id && item.status !== 'DRAFT')])
       setPendingOrders([])
       setSelectedOrderIds([])
       setSelectedVehicleIds([])
       setSelectedDriverByVehicleId({})
+      setManualRuns({})
       showSuccess('Rutas generadas.')
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo generar el borrador.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function createManualRoute() {
+    if (!selectedDeliverySlotId) {
+      showError('Selecciona una franja horaria antes de crear la ruta manual.')
+      return
+    }
+    const vehicleIds = selectedVehicleIds.filter((id) => selectableVehicleIdSet.has(id))
+    const runs = vehicleIds.map((vehicleId) => ({
+      vehicle_id: vehicleId,
+      driver_id: selectedDriverByVehicleId[String(vehicleId)] ?? null,
+      order_ids: manualRuns[String(vehicleId)] ?? [],
+    }))
+    const assignedOrderIds = new Set(runs.flatMap((run) => run.order_ids))
+    if (assignedOrderIds.size === 0) {
+      showError('Arrastra al menos un pedido a un vehiculo para crear la ruta manual.')
+      return
+    }
+    if (manualCapacityWarning) {
+      showError('Hay recorridos que superan la capacidad cargada del vehiculo.')
+      return
+    }
+    setGenerating(true)
+    try {
+      const draft = await api.createManualRoutePlan({ dispatch_date: dispatchDate, delivery_slot_id: selectedDeliverySlotId, runs })
+      setRoutePlans((current) => [draft, ...current.filter((item) => item.id !== draft.id && item.status !== 'DRAFT')])
+      setPendingOrders((current) => current.filter((order) => !assignedOrderIds.has(order.id)))
+      setSelectedOrderIds((current) => current.filter((orderId) => !assignedOrderIds.has(orderId)))
+      setSelectedVehicleIds([])
+      setSelectedDriverByVehicleId({})
+      setManualRuns({})
+      showSuccess('Ruta manual creada.')
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No se pudo crear la ruta manual.')
     } finally {
       setGenerating(false)
     }
@@ -342,7 +892,7 @@ export function DashboardRoutingPage() {
       const updated = await api.patchRouteStops(planId, {
         stops: draftRuns.flatMap((run) =>
           run.stops.map((stop) => ({
-            id: stop.id,
+            ...(stop.id > 0 ? { id: stop.id } : { order_id: stop.order }),
             route_run_id: run.id,
             sequence: stop.sequence,
             lat: stop.lat ?? stop.delivery_latitude ?? undefined,
@@ -351,7 +901,9 @@ export function DashboardRoutingPage() {
         ),
         remove_stop_ids: removedStopIds,
       })
+      const addedOrderIds = new Set(draftRuns.flatMap((run) => run.stops.filter((stop) => stop.id < 0).map((stop) => stop.order)))
       setRoutePlans((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+      setPendingOrders((current) => current.filter((order) => !addedOrderIds.has(order.id)))
       showSuccess('Ruta editada y recalculada.')
       cancelEditing()
     } catch (caught) {
@@ -382,11 +934,11 @@ export function DashboardRoutingPage() {
     return (
       <section className="grid gap-4">
         <div>
-          <h1 className="text-2xl font-800 text-slate-950">Ruteo automatico</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Disponible para distribuidoras con plan PRO o IA activo.</p>
+          <h1 className="text-2xl font-800 text-slate-950">Ruteo</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Organizacion de recorridos para distribuidoras activas.</p>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm font-700 text-amber-900">
-          Tu plan actual no incluye ruteo automatico. Actualiza a PRO o IA para generar hojas de ruta.
+          Tu cuenta todavia no tiene ruteo habilitado. Cuando la distribuidora este activa vas a poder crear rutas manuales.
         </div>
       </section>
     )
@@ -396,24 +948,62 @@ export function DashboardRoutingPage() {
     <section className="grid gap-5">
       <div className="grid gap-4 border-b border-slate-200 pb-5 lg:grid-cols-[1fr_auto] lg:items-end">
         <div className="max-w-3xl">
-          <h1 className="text-2xl font-800 text-slate-950">Ruteo automatico</h1>
-          <p className="mt-1 text-sm leading-6 text-slate-600">Selecciona pedidos, genera un borrador multi-chofer, revisa el mapa y confirma la asignacion.</p>
+          <h1 className="text-2xl font-800 text-slate-950">Ruteo de entregas</h1>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Arma rutas manuales arrastrando pedidos a vehiculos. El ruteo automatico queda disponible solo para el plan Pro.
+          </p>
+          {selectedDeliverySlot ? <p className="mt-2 text-xs font-800 uppercase text-brand-700">Franja activa: {deliverySlotLabel(selectedDeliverySlot)}</p> : null}
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="grid gap-1 text-sm font-700 text-slate-700">
-            Fecha
+            Fecha de entrega
             <input className="min-h-11 rounded-md border border-slate-300 px-3" type="date" value={dispatchDate} onChange={(event) => setDispatchDate(event.target.value)} />
+          </label>
+          <label className="grid min-w-56 gap-1 text-sm font-700 text-slate-700">
+            Franja horaria
+            <select
+              className="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+              value={selectedDeliverySlotId ?? ''}
+              onChange={(event) => {
+                setSelectedDeliverySlotId(event.target.value ? Number(event.target.value) : null)
+                setEditingPlanId(null)
+                setDraftRuns([])
+                setRemovedStopIds([])
+              }}
+            >
+              <option value="">Seleccionar franja</option>
+              {activeDeliverySlots.map((slot) => (
+                <option key={slot.id} value={slot.id}>
+                  {deliverySlotLabel(slot)}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-slate-600">
             Capacidad seleccionada: {formatCapacityAmount(selectedCapacity.kg, 'kg')} - {formatCapacityAmount(selectedCapacity.m3, 'm3')}
           </div>
-          <button className="min-h-11 rounded-md bg-brand-600 px-4 font-800 text-white disabled:opacity-60" type="button" disabled={!canGenerate} onClick={() => void generate()}>
-            {fleetLoading ? 'Cargando flota...' : generating ? 'Generando...' : 'Generar rutas'}
-          </button>
+          {manualRoutingEnabled ? (
+            <button className="min-h-11 rounded-md bg-slate-950 px-4 font-800 text-white disabled:opacity-60" type="button" disabled={!canCreateManual} onClick={() => void createManualRoute()}>
+              {generating ? 'Creando...' : 'Crear ruta manual'}
+            </button>
+          ) : null}
+          {automaticRoutingEnabled ? (
+            <button className="min-h-11 rounded-md bg-brand-600 px-4 font-800 text-white disabled:opacity-60" type="button" disabled={!canGenerate} onClick={() => void generate()}>
+              {fleetLoading ? 'Cargando flota...' : generating ? 'Generando...' : 'Generar rutas'}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {loading ? (
+      {activeDeliverySlots.length === 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm font-700 text-amber-900">
+          No hay franjas activas para rutear. Configura al menos una franja en Franjas.
+        </div>
+      ) : !selectedDeliverySlotId ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600 shadow-soft">
+          Selecciona fecha de entrega y franja horaria para cargar pedidos aceptados y rutas de esa ventana.
+        </div>
+      ) : loading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando rutas...</div>
       ) : (
         <>
@@ -430,17 +1020,40 @@ export function DashboardRoutingPage() {
                 onClear={() => {
                   setSelectedVehicleIds([])
                   setSelectedDriverByVehicleId({})
+                  setManualRuns({})
                 }}
                 onSelectAll={() => setSelectedVehicleIds(selectableVehicles.map((vehicle) => vehicle.id))}
                 onSelectDriver={selectVehicleDriver}
                 onToggle={toggleVehicle}
               />
-              <PendingOrdersPanel orders={pendingOrders} selectedOrderIds={selectedOrderIds} onToggle={toggleOrder} onSelectAll={() => setSelectedOrderIds(pendingOrders.filter((order) => order.routable).map((order) => order.id))} />
               {activePlan ? <RouteSummary plan={activePlan} /> : null}
             </div>
           </section>
 
-          {routePlans.length === 0 ? <EmptyState title="Sin borradores para esta fecha" text="Selecciona pedidos y optimiza para crear una hoja editable." /> : null}
+          <ManualRouteBoard
+            automaticRoutingEnabled={automaticRoutingEnabled}
+            canCreateManual={canCreateManual}
+            fleetLoading={fleetLoading}
+            generating={generating}
+            manualRuns={manualRuns}
+            orders={pendingOrders}
+            pendingOrderById={pendingOrderById}
+            selectedDriverByVehicleId={selectedDriverByVehicleId}
+            selectedOrderIds={selectedOrderIds}
+            selectedVehicleIds={selectedVehicleIds}
+            vehicles={vehicles}
+            onAssignOrder={assignManualOrder}
+            onClearRun={clearManualRun}
+            onCreateManual={() => void createManualRoute()}
+            onDropPending={handlePendingDrop}
+            onMoveOrder={moveManualOrder}
+            onRemoveOrder={removeManualOrder}
+            onReorderOrder={reorderManualOrder}
+            onSelectAllAuto={() => setSelectedOrderIds(pendingOrders.filter((order) => order.routable).map((order) => order.id))}
+            onToggleAutoOrder={toggleOrder}
+          />
+
+          {routePlans.length === 0 ? <EmptyState title="Sin borradores para esta fecha" text="Arrastra pedidos a los vehiculos para crear una ruta manual o usa la generacion automatica si tu plan lo incluye." /> : null}
 
           {routePlans.map((plan) => {
             const editable = editingPlanId === plan.id
@@ -453,6 +1066,9 @@ export function DashboardRoutingPage() {
                     <p className="mt-1 text-sm text-slate-600">
                       {plan.total_runs} recorridos - {plan.total_orders} pedidos - {Number(plan.total_distance_km).toLocaleString('es-AR')} km - version {plan.planning_version ?? 1}
                     </p>
+                    <p className="mt-1 text-xs font-800 text-slate-500">
+                      {plan.dispatch_date} - {routeSlotSummary(plan)}
+                    </p>
                   </div>
                   <StatusBadge status={plan.status} />
                 </div>
@@ -464,8 +1080,20 @@ export function DashboardRoutingPage() {
                 )}
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                  {runs.map((run) => (
-                    <section key={run.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  {runs.map((run) => {
+                    const vehicle = vehicles.find((item) => item.id === run.vehicle)
+                    const capacity = vehicle ? routeRunMetrics(run, vehicle) : null
+                    return (
+                    <section
+                      key={run.id}
+                      className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                      onDragOver={(event) => {
+                        if (editable) event.preventDefault()
+                      }}
+                      onDrop={(event) => {
+                        if (editable) handleDraftStopDrop(event, run.id)
+                      }}
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="font-800 text-slate-950">{run.driver_name}</h3>
@@ -475,9 +1103,23 @@ export function DashboardRoutingPage() {
                         </div>
                         <span className="rounded-md bg-white px-3 py-1 text-xs font-800 text-slate-600">{run.total_stops} paradas</span>
                       </div>
+                      {capacity ? <CapacityMeter className="mt-3" metrics={capacity} /> : null}
                       <div className="mt-4 grid gap-3">
                         {run.stops.map((stop, stopIndex) => (
-                          <div key={stop.id} className="rounded-md border border-slate-200 bg-white p-3 text-sm">
+                          <div
+                            key={stop.id}
+                            className={`rounded-md border bg-white p-3 text-sm ${editable ? 'cursor-grab border-slate-300 active:cursor-grabbing' : 'border-slate-200'}`}
+                            draggable={editable}
+                            onDragStart={(event) => {
+                              if (editable) writeDragPayload(event, { source: 'draft-stop', stopId: stop.id, fromRunId: run.id })
+                            }}
+                            onDragOver={(event) => {
+                              if (editable) event.preventDefault()
+                            }}
+                            onDrop={(event) => {
+                              if (editable) handleDraftStopDrop(event, run.id, stopIndex)
+                            }}
+                          >
                             <div className="flex items-center justify-between gap-3">
                               <strong className="text-slate-950">
                                 #{stop.sequence} - {stop.commerce_name}
@@ -486,7 +1128,7 @@ export function DashboardRoutingPage() {
                             </div>
                             <p className="mt-1 text-slate-600">{stop.delivery_address}</p>
                             <p className="mt-1 text-slate-500">
-                              ETA {timeOnly(stop.planned_eta)} - ventana {timeOnly(stop.window_start_at)} - {timeOnly(stop.window_end_at)}
+                              ETA {timeLabel(stop.planned_eta)} - ventana {timeLabel(stop.window_start_at)} - {timeLabel(stop.window_end_at)}
                             </p>
                             {editable && (
                               <div className="mt-3 flex flex-wrap gap-2">
@@ -526,7 +1168,8 @@ export function DashboardRoutingPage() {
                         ) : null}
                       </div>
                     </section>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 {plan.unassigned_summary.length > 0 ? (
@@ -573,7 +1216,7 @@ export function DashboardRoutingPage() {
                       Despachar
                     </button>
                   ) : null}
-                  {!editable && plan.status !== 'DISPATCHED' && plan.status !== 'COMPLETED' ? (
+                  {automaticRoutingEnabled && !editable && plan.status !== 'DISPATCHED' && plan.status !== 'COMPLETED' ? (
                     <button className="min-h-11 rounded-md border border-slate-300 px-4 font-800 text-slate-700" type="button" onClick={() => void runAction('replan', plan.id)}>
                       Replanificar
                     </button>
@@ -700,46 +1343,240 @@ function VehicleSelectionPanel({
   )
 }
 
-function PendingOrdersPanel({
+function ManualRouteBoard({
   orders,
+  vehicles,
+  selectedVehicleIds,
+  selectedDriverByVehicleId,
   selectedOrderIds,
-  onToggle,
-  onSelectAll,
+  manualRuns,
+  pendingOrderById,
+  automaticRoutingEnabled,
+  canCreateManual,
+  generating,
+  fleetLoading,
+  onAssignOrder,
+  onMoveOrder,
+  onReorderOrder,
+  onRemoveOrder,
+  onClearRun,
+  onCreateManual,
+  onToggleAutoOrder,
+  onSelectAllAuto,
+  onDropPending,
 }: {
   orders: PendingRouteOrder[]
+  vehicles: Vehicle[]
+  selectedVehicleIds: number[]
+  selectedDriverByVehicleId: Record<string, number>
   selectedOrderIds: number[]
-  onToggle: (order: PendingRouteOrder, checked: boolean) => void
-  onSelectAll: () => void
+  manualRuns: ManualRunsState
+  pendingOrderById: Map<number, PendingRouteOrder>
+  automaticRoutingEnabled: boolean
+  canCreateManual: boolean
+  generating: boolean
+  fleetLoading: boolean
+  onAssignOrder: (orderId: number, vehicleId: number, insertIndex?: number) => void
+  onMoveOrder: (orderId: number, fromVehicleId: number, toVehicleId: number, insertIndex?: number) => void
+  onReorderOrder: (vehicleId: number, orderId: number, direction: -1 | 1) => void
+  onRemoveOrder: (orderId: number, vehicleId: number) => void
+  onClearRun: (vehicleId: number) => void
+  onCreateManual: () => void
+  onToggleAutoOrder: (order: PendingRouteOrder, checked: boolean) => void
+  onSelectAllAuto: () => void
+  onDropPending: (event: DragEvent) => void
 }) {
+  const selectedVehicles = vehicles.filter((vehicle) => selectedVehicleIds.includes(vehicle.id))
+  const assignedOrderIds = new Set(Object.values(manualRuns).flat())
+  const pendingManualOrders = orders.filter((order) => !assignedOrderIds.has(order.id))
+  const selectedVehicleOptions = selectedVehicles.map((vehicle) => ({ id: vehicle.id, label: vehicle.plate || `Vehiculo #${vehicle.id}` }))
+
+  function handleRunDrop(event: DragEvent, vehicleId: number, insertIndex?: number) {
+    const payload = readDragPayload(event)
+    if (!payload) return
+    event.preventDefault()
+    if (payload.source === 'pending-order') onAssignOrder(payload.orderId, vehicleId, insertIndex)
+    if (payload.source === 'manual-order') onMoveOrder(payload.orderId, payload.fromVehicleId, vehicleId, insertIndex)
+  }
+
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-      <div className="flex items-start justify-between gap-3">
+    <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-800 text-slate-950">Pedidos pendientes</h2>
-          <p className="mt-1 text-sm text-slate-600">{orders.length} pedidos disponibles</p>
+          <h2 className="font-800 text-slate-950">Tablero de ruteo manual</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {pendingManualOrders.length} pendientes - {assignedOrderIds.size} en ruta manual - {selectedVehicles.length} vehiculos activos
+          </p>
         </div>
-        <button className="min-h-9 rounded-md border border-slate-300 px-3 text-xs font-800 text-slate-700" type="button" onClick={onSelectAll}>
-          Seleccionar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {automaticRoutingEnabled ? (
+            <button className="min-h-9 rounded-md border border-slate-300 px-3 text-xs font-800 text-slate-700" type="button" onClick={onSelectAllAuto}>
+              Auto: todos
+            </button>
+          ) : null}
+          <button className="min-h-9 rounded-md bg-slate-950 px-3 text-xs font-800 text-white disabled:opacity-60" type="button" disabled={!canCreateManual} onClick={onCreateManual}>
+            {generating ? 'Creando...' : 'Crear manual'}
+          </button>
+        </div>
       </div>
-      <div className="mt-4 grid max-h-[21rem] gap-2 overflow-y-auto pr-1">
-        {orders.length === 0 ? (
-          <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm font-700 text-slate-500">Sin pedidos pendientes fuera de borradores activos.</p>
-        ) : (
-          orders.map((order) => (
-            <label key={order.id} className="grid grid-cols-[auto_1fr] gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-              <input className="mt-1 h-4 w-4" type="checkbox" disabled={!order.routable} checked={selectedOrderIds.includes(order.id)} onChange={(event) => onToggle(order, event.target.checked)} />
-              <span>
-                <span className="block font-800 text-slate-950">{order.commerce_name}</span>
-                <span className="block text-slate-600">{order.delivery_address}</span>
-                <span className="mt-1 block text-xs font-700 text-slate-500">
-                  {Number(order.planned_weight_kg).toLocaleString('es-AR')} kg - {Number(order.planned_volume_m3).toLocaleString('es-AR')} m3
-                  {order.exclusion_reason ? ` - ${reasonLabel(order.exclusion_reason)}` : ''}
-                </span>
-              </span>
-            </label>
-          ))
-        )}
+
+      <div className="grid gap-3 xl:grid-cols-[18rem_minmax(0,1fr)]">
+        <div
+          className="grid content-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={onDropPending}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-800 text-slate-950">Pedidos pendientes</h3>
+            <span className="rounded-md bg-white px-2 py-1 text-[11px] font-800 text-slate-500">{pendingManualOrders.length}</span>
+          </div>
+          <div className="grid max-h-[30rem] gap-2 overflow-y-auto pr-1">
+            {orders.length === 0 ? (
+              <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-4 text-sm font-700 text-slate-500">Sin pedidos pendientes fuera de borradores activos.</p>
+            ) : pendingManualOrders.length === 0 ? (
+              <p className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-4 text-sm font-700 text-slate-500">Todos los pedidos disponibles estan asignados al tablero.</p>
+            ) : (
+              pendingManualOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className={`rounded-md border p-3 text-sm ${order.routable ? 'cursor-grab border-slate-200 bg-white active:cursor-grabbing' : 'border-amber-200 bg-amber-50'}`}
+                  draggable={order.routable}
+                  onDragStart={(event) => writeDragPayload(event, { source: 'pending-order', orderId: order.id })}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <strong className="text-slate-950">{order.commerce_name}</strong>
+                    {automaticRoutingEnabled ? (
+                      <label className="flex items-center gap-1 text-[11px] font-800 text-slate-500">
+                        <input
+                          className="h-4 w-4"
+                          type="checkbox"
+                          disabled={!order.routable}
+                          checked={selectedOrderIds.includes(order.id)}
+                          onChange={(event) => onToggleAutoOrder(order, event.target.checked)}
+                        />
+                        Auto
+                      </label>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-slate-600">{order.delivery_address}</p>
+                  <p className="mt-1 text-xs font-700 text-slate-500">
+                    {formatCapacityAmount(Number(order.planned_weight_kg), 'kg')} - {formatCapacityAmount(Number(order.planned_volume_m3), 'm3')}
+                    {order.exclusion_reason ? ` - ${reasonLabel(order.exclusion_reason)}` : ''}
+                  </p>
+                  <select
+                    className="mt-2 min-h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-xs font-800 text-slate-700 disabled:opacity-60"
+                    defaultValue=""
+                    disabled={!order.routable || selectedVehicleOptions.length === 0}
+                    aria-label={`Agregar pedido ${order.id} a una ruta`}
+                    onChange={(event) => {
+                      if (!event.target.value) return
+                      onAssignOrder(order.id, Number(event.target.value))
+                      event.target.value = ''
+                    }}
+                  >
+                    <option value="">Agregar a...</option>
+                    {selectedVehicleOptions.map((vehicle) => (
+                      <option key={vehicle.id} value={vehicle.id}>
+                        {vehicle.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {fleetLoading ? (
+            <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm font-700 text-slate-500">Cargando flota...</p>
+          ) : selectedVehicles.length === 0 ? (
+            <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm font-700 text-slate-500">Selecciona vehiculos para abrir columnas de ruta manual.</p>
+          ) : (
+            selectedVehicles.map((vehicle) => {
+              const orderIds = manualRuns[String(vehicle.id)] ?? []
+              const runOrders = orderIds.map((orderId) => pendingOrderById.get(orderId)).filter(Boolean) as PendingRouteOrder[]
+              const metrics = manualRunMetrics(vehicle, orderIds, pendingOrderById)
+              return (
+                <section
+                  key={vehicle.id}
+                  className={`grid content-start gap-3 rounded-md border p-3 ${metrics.overCapacity ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50'}`}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => handleRunDrop(event, vehicle.id)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-800 text-slate-950">{vehicle.plate}</h3>
+                      <p className="text-xs font-700 text-slate-500">
+                        {selectedDriverByVehicleId[String(vehicle.id)] ? `Chofer #${selectedDriverByVehicleId[String(vehicle.id)]}` : 'Chofer sin asignar'}
+                      </p>
+                    </div>
+                    <button className="min-h-8 rounded-md border border-slate-300 bg-white px-2 text-[11px] font-800 text-slate-600" type="button" onClick={() => onClearRun(vehicle.id)}>
+                      Vaciar
+                    </button>
+                  </div>
+                  <CapacityMeter metrics={metrics} />
+                  <div className="grid min-h-28 gap-2">
+                    {runOrders.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-slate-300 bg-white px-3 py-4 text-sm font-700 text-slate-500">Arrastra pedidos aca.</div>
+                    ) : (
+                      runOrders.map((order, orderIndex) => (
+                        <div
+                          key={order.id}
+                          className="cursor-grab rounded-md border border-slate-200 bg-white p-3 text-sm active:cursor-grabbing"
+                          draggable
+                          onDragStart={(event) => writeDragPayload(event, { source: 'manual-order', orderId: order.id, fromVehicleId: vehicle.id })}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={(event) => handleRunDrop(event, vehicle.id, orderIndex)}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <strong className="text-slate-950">
+                              #{orderIndex + 1} {order.commerce_name}
+                            </strong>
+                            <button className="rounded-md border border-red-200 px-2 py-1 text-[11px] font-800 text-red-700" type="button" onClick={() => onRemoveOrder(order.id, vehicle.id)}>
+                              Quitar
+                            </button>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-slate-600">{order.delivery_address}</p>
+                          <p className="mt-1 text-xs font-700 text-slate-500">
+                            {formatCapacityAmount(Number(order.planned_weight_kg), 'kg')} - {formatCapacityAmount(Number(order.planned_volume_m3), 'm3')}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button className="min-h-8 rounded-md border border-slate-300 px-2 text-[11px] font-800 text-slate-700" type="button" onClick={() => onReorderOrder(vehicle.id, order.id, -1)}>
+                              Subir
+                            </button>
+                            <button className="min-h-8 rounded-md border border-slate-300 px-2 text-[11px] font-800 text-slate-700" type="button" onClick={() => onReorderOrder(vehicle.id, order.id, 1)}>
+                              Bajar
+                            </button>
+                            <select
+                              className="min-h-8 rounded-md border border-slate-300 px-2 text-[11px] font-800 text-slate-700"
+                              defaultValue=""
+                              aria-label={`Mover pedido ${order.id}`}
+                              onChange={(event) => {
+                                if (!event.target.value) return
+                                onMoveOrder(order.id, vehicle.id, Number(event.target.value))
+                                event.target.value = ''
+                              }}
+                            >
+                              <option value="">Mover</option>
+                              {selectedVehicleOptions
+                                .filter((candidate) => candidate.id !== vehicle.id)
+                                .map((candidate) => (
+                                  <option key={candidate.id} value={candidate.id}>
+                                    {candidate.label}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </section>
+              )
+            })
+          )}
+        </div>
       </div>
     </section>
   )
@@ -753,6 +1590,9 @@ function RouteSummary({ plan }: { plan: RoutePlan }) {
           <h2 className="font-800 text-slate-950">{plan.route_number ?? `Plan #${plan.id}`}</h2>
           <p className="mt-1 text-sm text-slate-600">
             {plan.total_runs} recorridos - {plan.total_orders} paradas - {Number(plan.total_distance_km).toLocaleString('es-AR')} km
+          </p>
+          <p className="mt-1 text-xs font-800 text-slate-500">
+            {plan.dispatch_date} - {routeSlotSummary(plan)}
           </p>
         </div>
         <StatusBadge status={plan.status} />
@@ -922,6 +1762,68 @@ function formatCapacityAmount(value: number, unit: 'kg' | 'm3') {
   return `${value.toLocaleString('es-AR', { maximumFractionDigits: unit === 'kg' ? 0 : 2 })} ${unit}`
 }
 
+function CapacityMeter({ metrics, className = '' }: { metrics: CapacityMetrics; className?: string }) {
+  const kgWidth = Math.min(metrics.kgPercent, 100)
+  const m3Width = Math.min(metrics.m3Percent, 100)
+  return (
+    <div className={`grid gap-2 text-xs font-800 ${className}`}>
+      <div>
+        <div className="flex justify-between gap-2 text-slate-600">
+          <span>Kg {formatCapacityAmount(metrics.loadKg, 'kg')}</span>
+          <span>{metrics.capacityKg > 0 ? `${metrics.kgPercent.toFixed(0)}%` : 'sin limite'}</span>
+        </div>
+        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+          <div className={`h-full rounded-full ${metrics.kgPercent > 100 ? 'bg-red-500' : 'bg-brand-600'}`} style={{ width: `${kgWidth}%` }} />
+        </div>
+      </div>
+      <div>
+        <div className="flex justify-between gap-2 text-slate-600">
+          <span>M3 {formatCapacityAmount(metrics.loadM3, 'm3')}</span>
+          <span>{metrics.capacityM3 > 0 ? `${metrics.m3Percent.toFixed(0)}%` : 'sin limite'}</span>
+        </div>
+        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+          <div className={`h-full rounded-full ${metrics.m3Percent > 100 ? 'bg-red-500' : 'bg-mint-700'}`} style={{ width: `${m3Width}%` }} />
+        </div>
+      </div>
+      {metrics.overCapacity ? <p className="rounded-md border border-red-200 bg-white px-2 py-1 text-red-700">Supera la capacidad del vehiculo.</p> : null}
+    </div>
+  )
+}
+
+function manualRunMetrics(vehicle: Vehicle, orderIds: number[], pendingOrderById: Map<number, PendingRouteOrder>): CapacityMetrics {
+  const load = orderIds.reduce(
+    (total, orderId) => {
+      const order = pendingOrderById.get(orderId)
+      return {
+        kg: total.kg + Number(order?.planned_weight_kg ?? 0),
+        m3: total.m3 + Number(order?.planned_volume_m3 ?? 0),
+      }
+    },
+    { kg: 0, m3: 0 },
+  )
+  return capacityMetrics(load.kg, load.m3, vehicle)
+}
+
+function routeRunMetrics(run: RouteRun, vehicle: Vehicle): CapacityMetrics {
+  return capacityMetrics(Number(run.load_kg ?? 0), Number(run.load_m3 ?? 0), vehicle)
+}
+
+function capacityMetrics(loadKg: number, loadM3: number, vehicle: Vehicle): CapacityMetrics {
+  const capacityKg = Number(vehicle.capacity_kg ?? 0)
+  const capacityM3 = Number(vehicle.capacity_m3 ?? 0)
+  const kgPercent = capacityKg > 0 ? (loadKg / capacityKg) * 100 : 0
+  const m3Percent = capacityM3 > 0 ? (loadM3 / capacityM3) * 100 : 0
+  return {
+    loadKg,
+    loadM3,
+    capacityKg,
+    capacityM3,
+    kgPercent,
+    m3Percent,
+    overCapacity: (capacityKg > 0 && loadKg > capacityKg) || (capacityM3 > 0 && loadM3 > capacityM3),
+  }
+}
+
 function vehicleBlockReason(vehicle: Vehicle) {
   if (!vehicle.active || ['MAINTENANCE', 'INACTIVE'].includes(vehicle.status)) return 'no disponible'
   if (!hasVehicleCapacity(vehicle)) return 'sin capacidad cargada'
@@ -929,7 +1831,7 @@ function vehicleBlockReason(vehicle: Vehicle) {
 }
 
 function cloneRuns(runs: RouteRun[]) {
-  return runs.map((run) => ({
+  return runs.map((run) => recalculateRun({
     ...run,
     stops: run.stops.map((stop) => ({ ...stop })),
   }))
@@ -939,14 +1841,142 @@ function resequenceStops<T extends { sequence: number }>(stops: T[]) {
   return stops.map((stop, index) => ({ ...stop, sequence: index + 1 }))
 }
 
+function recalculateRun(run: RouteRun): RouteRun {
+  const stops = resequenceStops(run.stops)
+  const loadKg = stops.reduce((total, stop) => total + Number(stop.demand_kg ?? 0), 0)
+  const loadM3 = stops.reduce((total, stop) => total + Number(stop.demand_m3 ?? 0), 0)
+  return {
+    ...run,
+    stops,
+    total_stops: stops.length,
+    load_kg: loadKg.toFixed(3),
+    load_m3: loadM3.toFixed(6),
+  }
+}
+
+function pendingOrderToStop(order: PendingRouteOrder): RouteStop {
+  return {
+    id: -order.id,
+    order: order.id,
+    delivery_id: null,
+    order_status: order.status,
+    commerce_name: order.commerce_name,
+    delivery_address: order.delivery_address,
+    delivery_latitude: order.lat,
+    delivery_longitude: order.lng,
+    lat: order.lat,
+    lng: order.lng,
+    sequence: 1,
+    status: 'PENDING',
+    address_snapshot: order.address_snapshot,
+    planned_eta: '',
+    window_start_at: '',
+    window_end_at: '',
+    leg_distance_km: '0',
+    leg_duration_min: '0',
+    demand_kg: order.planned_weight_kg,
+    demand_m3: order.planned_volume_m3,
+    lines: [],
+  }
+}
+
+function resolveInsertIndex(index: number | undefined, length: number) {
+  if (index === undefined || !Number.isFinite(index)) return length
+  return Math.max(0, Math.min(index, length))
+}
+
+function writeDragPayload(event: DragEvent, payload: ManualDragPayload) {
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('application/x-distromax-route', JSON.stringify(payload))
+}
+
+function readDragPayload(event: DragEvent): ManualDragPayload | null {
+  const raw = event.dataTransfer.getData('application/x-distromax-route')
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as ManualDragPayload
+    if (parsed.source === 'pending-order' && Number.isFinite(parsed.orderId)) return parsed
+    if (parsed.source === 'manual-order' && Number.isFinite(parsed.orderId) && Number.isFinite(parsed.fromVehicleId)) return parsed
+    if (parsed.source === 'draft-stop' && Number.isFinite(parsed.stopId) && Number.isFinite(parsed.fromRunId)) return parsed
+  } catch {
+    return null
+  }
+  return null
+}
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: 'Pendiente',
+    ACCEPTED: 'Aceptado',
+    REJECTED: 'Rechazado',
+    PREPARING: 'Preparando',
+    SCHEDULED: 'Programado',
+    ON_THE_WAY: 'En camino',
+    DELIVERED: 'Entregado',
+    CANCELLED: 'Cancelado',
+  }
+  return labels[status] ?? status
+}
+
+function formatMoney(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0)
+  return amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
+}
+
+function formatQuantity(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0)
+  return amount.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+}
+
+function formatOrderDate(value: string | null | undefined) {
+  if (!value) return 'Sin fecha'
+  const [year, month, day] = value.split('-')
+  if (!year || !month || !day) return value
+  return `${day}/${month}/${year}`
+}
+
+function deliverySlotLabel(slot: DistributorDeliverySlot) {
+  return `${slot.name} (${timeValueLabel(slot.start_time)}-${timeValueLabel(slot.end_time)})`
+}
+
+function deliverySlotSummary(order: Order) {
+  if (order.delivery_slot_name) {
+    return `${order.delivery_slot_name} ${windowRangeLabel(order.delivery_window_start, order.delivery_window_end)}`
+  }
+  return windowRangeLabel(order.delivery_window_start, order.delivery_window_end)
+}
+
+function routeSlotSummary(plan: RoutePlan) {
+  if (plan.delivery_slot_name) {
+    return `${plan.delivery_slot_name} ${windowRangeLabel(plan.delivery_window_start, plan.delivery_window_end)}`
+  }
+  return windowRangeLabel(plan.delivery_window_start, plan.delivery_window_end)
+}
+
+function windowRangeLabel(start: string | null | undefined, end: string | null | undefined) {
+  if (!start || !end) return 'Sin franja'
+  return `${timeValueLabel(start)}-${timeValueLabel(end)}`
+}
+
+function timeValueLabel(value: string | null | undefined) {
+  if (!value) return ''
+  if (/^\d{2}:\d{2}/.test(value)) return value.slice(0, 5)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 5)
+  return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+}
+
 function defaultRouteDate() {
   const base = new Date()
   base.setDate(base.getDate() + 1)
   return base.toISOString().slice(0, 10)
 }
 
-function timeOnly(value: string) {
-  return new Date(value).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+function timeLabel(value: string) {
+  if (!value) return 'pendiente'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'pendiente'
+  return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
 }
 
 function reasonLabel(reason: string) {

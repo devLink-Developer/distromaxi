@@ -11,7 +11,8 @@ from apps.distributors.utils import get_user_distributor
 from .models import RoutePlanStatus, RouteRunStatus, RouteStopStatus
 
 
-ROUTING_ENABLED_PLANS = {"PRO", "IA"}
+MANUAL_ROUTING_PLANS = {"STANDARD", "PLUS", "PRO"}
+AUTOMATIC_ROUTING_PLANS = {"PRO"}
 
 
 def distributor_plan_name(distributor):
@@ -21,21 +22,50 @@ def distributor_plan_name(distributor):
     return str(distributor.plan_name or "").upper()
 
 
-def distributor_has_routing(distributor):
+def _plan_key(distributor):
+    return distributor_plan_name(distributor).replace(" ", "_")
+
+
+def distributor_has_manual_routing(distributor):
     return bool(
         distributor
         and distributor.can_operate
-        and distributor_plan_name(distributor) in ROUTING_ENABLED_PLANS
+        and _plan_key(distributor) in MANUAL_ROUTING_PLANS
     )
 
 
-def get_routing_distributor(user):
+def distributor_has_automatic_routing(distributor):
+    return bool(
+        distributor
+        and distributor.can_operate
+        and _plan_key(distributor) in AUTOMATIC_ROUTING_PLANS
+    )
+
+
+def distributor_has_routing(distributor):
+    return distributor_has_manual_routing(distributor) or distributor_has_automatic_routing(distributor)
+
+
+def get_manual_routing_distributor(user):
     distributor = get_user_distributor(user)
     if distributor is None:
         raise PermissionDenied("No encontramos una distribuidora asociada a esta cuenta.")
-    if not distributor_has_routing(distributor):
-        raise PermissionDenied("El ruteo automatico esta disponible solo para planes PRO e IA activos.")
+    if not distributor_has_manual_routing(distributor):
+        raise PermissionDenied("El ruteo manual esta disponible para planes Standard, Plus y Pro activos.")
     return distributor
+
+
+def get_automatic_routing_distributor(user):
+    distributor = get_user_distributor(user)
+    if distributor is None:
+        raise PermissionDenied("No encontramos una distribuidora asociada a esta cuenta.")
+    if not distributor_has_automatic_routing(distributor):
+        raise PermissionDenied("El ruteo automatico esta disponible solo para planes Pro activos.")
+    return distributor
+
+
+def get_routing_distributor(user):
+    return get_manual_routing_distributor(user)
 
 
 def routing_provider():

@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand
 from apps.billing.models import Plan, Subscription
 from apps.commerces.models import Commerce
 from apps.deliveries.models import Delivery
-from apps.distributors.models import Distributor
+from apps.distributors.models import Distributor, DistributorDeliverySlot
 from apps.fleet.models import DriverProfile, Vehicle
 from apps.inventory.services import adjust_stock, ensure_default_warehouse
 from apps.orders.models import Order, OrderItem
@@ -44,24 +44,31 @@ class Command(BaseCommand):
                 "latitude": Decimal("-34.6037220"),
                 "longitude": Decimal("-58.3815920"),
                 "subscription_status": "ACTIVE",
-                "plan_name": "PRO",
+                "plan_name": "Pro",
                 "mercado_pago_link": PRO_PLAN_URL,
                 "active": True,
             },
         )
         plan, created = Plan.objects.get_or_create(
-            name="PRO",
+            name="Pro",
             defaults={
-                "price": Decimal("49900.00"),
-                "description": "Escala tu operación. Estadísticas avanzadas y mejor control.",
+                "price": Decimal("89900.00"),
+                "description": "Automatizacion logistica y comercial con ruteo automatico e integraciones avanzadas.",
                 "currency": "ARS",
                 "mp_subscription_url": PRO_PLAN_URL,
                 "mp_preapproval_plan_id": PRO_PLAN_ID,
                 "is_active": True,
-                "sort_order": 20,
-                "is_featured": True,
-                "max_products": 5000,
-                "max_drivers": 80,
+                "features": [
+                    "Todo Plus",
+                    "Ruteo automatico y replanificacion",
+                    "Optimizacion multi-vehiculo",
+                    "Metricas logisticas avanzadas",
+                    "Integraciones avanzadas",
+                ],
+                "sort_order": 30,
+                "is_featured": False,
+                "max_products": 12000,
+                "max_drivers": 200,
             },
         )
         if not created and (not plan.mp_subscription_url or not plan.mp_preapproval_plan_id):
@@ -100,6 +107,16 @@ class Command(BaseCommand):
                 "delivery_notes": "Recibir por entrada lateral de 8 a 14.",
                 "active": True,
             },
+        )
+        morning_slot, _ = DistributorDeliverySlot.objects.update_or_create(
+            distributor=distributor,
+            name="Maniana",
+            defaults={"start_time": "08:00", "end_time": "12:00", "sort_order": 1, "active": True},
+        )
+        DistributorDeliverySlot.objects.update_or_create(
+            distributor=distributor,
+            name="Tarde",
+            defaults={"start_time": "13:00", "end_time": "17:00", "sort_order": 2, "active": True},
         )
 
         warehouse = ensure_default_warehouse(distributor)
@@ -196,8 +213,9 @@ class Command(BaseCommand):
                 "delivery_address": commerce.address,
                 "delivery_latitude": commerce.latitude,
                 "delivery_longitude": commerce.longitude,
-                "delivery_window_start": commerce.default_window_start,
-                "delivery_window_end": commerce.default_window_end,
+                "delivery_slot": morning_slot,
+                "delivery_window_start": morning_slot.start_time,
+                "delivery_window_end": morning_slot.end_time,
             },
         )
         delivered_order.items.all().delete()
@@ -218,8 +236,9 @@ class Command(BaseCommand):
                 "delivery_address": commerce.address,
                 "delivery_latitude": commerce.latitude,
                 "delivery_longitude": commerce.longitude,
-                "delivery_window_start": commerce.default_window_start,
-                "delivery_window_end": commerce.default_window_end,
+                "delivery_slot": morning_slot,
+                "delivery_window_start": morning_slot.start_time,
+                "delivery_window_end": morning_slot.end_time,
             },
         )
         pending_order.items.all().delete()

@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.billing.models import Plan, Subscription
 from apps.commerces.models import Commerce
-from apps.distributors.models import Distributor
+from apps.distributors.models import Distributor, DistributorDeliverySlot
 from apps.fleet.models import DriverProfile, Vehicle
 from apps.inventory.services import adjust_stock, ensure_default_warehouse
 from apps.orders.models import Order
@@ -45,12 +45,12 @@ class RoutingFlowTests(TestCase):
             province="CABA",
             latitude=Decimal("-34.6037220"),
             longitude=Decimal("-58.3815920"),
-            plan_name="PRO",
+            plan_name="Pro",
             subscription_status="ACTIVE",
             active=True,
         )
         plan, _ = Plan.objects.update_or_create(
-            name="PRO",
+            name="Pro",
             defaults={
                 "price": Decimal("1.00"),
                 "description": "Pro",
@@ -312,40 +312,216 @@ class RoutingFlowTests(TestCase):
         self.assertTrue(response.data[0]["routable"])
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
-    def test_routing_is_allowed_for_ia_plan(self):
-        ia_plan, _ = Plan.objects.update_or_create(
-            name="IA",
-            defaults={"price": Decimal("2.00"), "description": "IA", "currency": "ARS", "is_active": True, "sort_order": 2},
+    def test_pending_orders_filters_by_delivery_slot(self):
+        morning = DistributorDeliverySlot.objects.create(distributor=self.distributor, name="Maniana", start_time="08:00", end_time="12:00", sort_order=1)
+        afternoon = DistributorDeliverySlot.objects.create(distributor=self.distributor, name="Tarde", start_time="13:00", end_time="17:00", sort_order=2)
+        self.order.delivery_slot = morning
+        self.order.delivery_window_start = morning.start_time
+        self.order.delivery_window_end = morning.end_time
+        self.order.save(update_fields=["delivery_slot", "delivery_window_start", "delivery_window_end", "updated_at"])
+        second_commerce = Commerce.objects.create(
+            distributor=self.distributor,
+            trade_name="Comercio tarde",
+            tax_id="30-789",
+            contact_name="Compras",
+            phone="555",
+            address="Cliente tarde",
+            latitude=Decimal("-34.5900000"),
+            longitude=Decimal("-58.4300000"),
         )
-        self.distributor.subscription.plan = ia_plan
-        self.distributor.subscription.save(update_fields=["plan"])
-        self.distributor.plan_name = "IA"
-        self.distributor.save(update_fields=["plan_name", "updated_at"])
+        second_order = Order.objects.create(
+            commerce=second_commerce,
+            distributor=self.distributor,
+            total=Decimal("100.00"),
+            status="ACCEPTED",
+            dispatch_date=self.order.dispatch_date,
+            delivery_slot=afternoon,
+            delivery_window_start=afternoon.start_time,
+            delivery_window_end=afternoon.end_time,
+            delivery_address="Cliente tarde",
+            delivery_latitude=second_commerce.latitude,
+            delivery_longitude=second_commerce.longitude,
+        )
+        second_order.items.create(
+            product=self.product,
+            product_name=self.product.name,
+            sku=self.product.sku,
+            quantity=Decimal("1.000"),
+            price=self.product.price,
+            subtotal=self.product.price,
+            weight_kg=Decimal("10.000"),
+            volume_m3=Decimal("1.000000"),
+        )
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.get(
+            f"/api/route-plans/pending-orders/?dispatch_date={self.order.dispatch_date.isoformat()}&delivery_slot_id={morning.id}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data], [self.order.id])
+        self.assertEqual(response.data[0]["delivery_slot"], morning.id)
+        self.assertEqual(response.data[0]["delivery_slot_name"], "Maniana")
+
+    @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
+    def test_manual_route_uses_delivery_slot_snapshot(self):
+        slot = DistributorDeliverySlot.objects.create(distributor=self.distributor, name="Maniana", start_time="08:00", end_time="12:00", sort_order=1)
+        self.order.delivery_slot = slot
+        self.order.delivery_window_start = slot.start_time
+        self.order.delivery_window_end = slot.end_time
+        self.order.save(update_fields=["delivery_slot", "delivery_window_start", "delivery_window_end", "updated_at"])
         self.client.force_authenticate(self.distributor_user)
 
         response = self.client.post(
+            "/api/route-plans/manual/",
+            {
+                "dispatch_date": self.order.dispatch_date.isoformat(),
+                "delivery_slot_id": slot.id,
+                "runs": [{"vehicle_id": self.vehicle.id, "driver_id": self.driver.id, "order_ids": [self.order.id]}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["provider"], "manual")
+        self.assertEqual(response.data["delivery_slot"], slot.id)
+        self.assertEqual(response.data["delivery_window_start"], "08:00:00")
+        self.assertEqual(response.data["delivery_window_end"], "12:00:00")
+
+    @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
+    def test_manual_route_rejects_over_capacity(self):
+        self.product.weight = Decimal("600.000")
+        self.product.save(update_fields=["weight"])
+        self.order.items.update(weight_kg=Decimal("600.000"))
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.post(
+            "/api/route-plans/manual/",
+            {
+                "dispatch_date": self.order.dispatch_date.isoformat(),
+                "runs": [{"vehicle_id": self.vehicle.id, "driver_id": self.driver.id, "order_ids": [self.order.id]}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("capacidad", str(response.data).lower())
+        self.assertFalse(RoutePlan.objects.exists())
+
+    @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
+    def test_patch_stops_adds_pending_order_by_order_id(self):
+        second_commerce = Commerce.objects.create(
+            distributor=self.distributor,
+            trade_name="Comercio 2",
+            tax_id="30-456",
+            contact_name="Compras",
+            phone="444",
+            address="Cliente 2",
+            latitude=Decimal("-34.5900000"),
+            longitude=Decimal("-58.4300000"),
+        )
+        second_order = Order.objects.create(
+            commerce=second_commerce,
+            distributor=self.distributor,
+            total=Decimal("100.00"),
+            status="ACCEPTED",
+            dispatch_date=self.order.dispatch_date,
+            delivery_address="Cliente 2",
+            delivery_latitude=second_commerce.latitude,
+            delivery_longitude=second_commerce.longitude,
+        )
+        second_order.items.create(
+            product=self.product,
+            product_name=self.product.name,
+            sku=self.product.sku,
+            quantity=Decimal("1.000"),
+            price=self.product.price,
+            subtotal=self.product.price,
+            weight_kg=Decimal("10.000"),
+            volume_m3=Decimal("1.000000"),
+        )
+        self.client.force_authenticate(self.distributor_user)
+        manual_response = self.client.post(
+            "/api/route-plans/manual/",
+            {
+                "dispatch_date": self.order.dispatch_date.isoformat(),
+                "runs": [{"vehicle_id": self.vehicle.id, "driver_id": self.driver.id, "order_ids": [self.order.id]}],
+            },
+            format="json",
+        )
+        run = manual_response.data["runs"][0]
+        stop = run["stops"][0]
+
+        response = self.client.patch(
+            f"/api/route-plans/{manual_response.data['id']}/stops/",
+            {
+                "stops": [
+                    {"id": stop["id"], "route_run_id": run["id"], "sequence": 1, "lat": stop["lat"], "lng": stop["lng"]},
+                    {"order_id": second_order.id, "route_run_id": run["id"], "sequence": 2},
+                ],
+                "remove_stop_ids": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["total_orders"], 2)
+        self.assertEqual([item["order"] for item in response.data["runs"][0]["stops"]], [self.order.id, second_order.id])
+
+    @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
+    def test_manual_routing_is_allowed_for_standard_plan(self):
+        standard_plan, _ = Plan.objects.update_or_create(
+            name="Standard",
+            defaults={"price": Decimal("1.00"), "description": "Standard", "currency": "ARS", "is_active": True, "sort_order": 1},
+        )
+        self.distributor.subscription.plan = standard_plan
+        self.distributor.subscription.save(update_fields=["plan"])
+        self.distributor.plan_name = "Standard"
+        self.distributor.save(update_fields=["plan_name", "updated_at"])
+        self.client.force_authenticate(self.distributor_user)
+
+        pending_response = self.client.get(f"/api/route-plans/pending-orders/?dispatch_date={self.order.dispatch_date.isoformat()}")
+        manual_response = self.client.post(
+            "/api/route-plans/manual/",
+            {
+                "dispatch_date": self.order.dispatch_date.isoformat(),
+                "runs": [{"vehicle_id": self.vehicle.id, "driver_id": self.driver.id, "order_ids": [self.order.id]}],
+            },
+            format="json",
+        )
+        automatic_response = self.client.post(
             "/api/route-plans/generate/",
             {"dispatch_date": self.order.dispatch_date.isoformat()},
             format="json",
         )
 
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(pending_response.status_code, 200)
+        self.assertEqual(manual_response.status_code, 201)
+        self.assertEqual(manual_response.data["provider"], "manual")
+        self.assertEqual(manual_response.data["routing_status"], "manual")
+        self.assertEqual(automatic_response.status_code, 403)
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
-    def test_routing_is_blocked_for_non_pro_or_ia_plan(self):
-        start_plan, _ = Plan.objects.update_or_create(
-            name="START",
-            defaults={"price": Decimal("0.00"), "description": "Start", "currency": "ARS", "is_active": True, "sort_order": 0},
+    def test_automatic_routing_is_blocked_for_plus_plan(self):
+        plus_plan, _ = Plan.objects.update_or_create(
+            name="Plus",
+            defaults={"price": Decimal("2.00"), "description": "Plus", "currency": "ARS", "is_active": True, "sort_order": 2},
         )
-        self.distributor.subscription.plan = start_plan
+        self.distributor.subscription.plan = plus_plan
         self.distributor.subscription.save(update_fields=["plan"])
-        self.distributor.plan_name = "START"
+        self.distributor.plan_name = "Plus"
         self.distributor.save(update_fields=["plan_name", "updated_at"])
         self.client.force_authenticate(self.distributor_user)
 
-        response = self.client.get(f"/api/route-plans/pending-orders/?dispatch_date={self.order.dispatch_date.isoformat()}")
+        pending_response = self.client.get(f"/api/route-plans/pending-orders/?dispatch_date={self.order.dispatch_date.isoformat()}")
+        automatic_response = self.client.post(
+            "/api/route-plans/generate/",
+            {"dispatch_date": self.order.dispatch_date.isoformat()},
+            format="json",
+        )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(pending_response.status_code, 200)
+        self.assertEqual(automatic_response.status_code, 403)
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
     @patch("apps.routing.engine.ors_build_matrix")

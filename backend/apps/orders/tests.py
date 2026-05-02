@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.commerces.models import Commerce
 from apps.deliveries.models import Delivery
-from apps.distributors.models import Distributor
+from apps.distributors.models import Distributor, DistributorDeliverySlot
 from apps.fleet.models import DriverProfile, Vehicle
 from apps.inventory.models import StockItem
 from apps.inventory.services import adjust_stock, ensure_default_warehouse
@@ -140,6 +140,62 @@ class DistroMaxiFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         stock.refresh_from_db()
         self.assertEqual(stock.quantity, Decimal("7.000"))
+        self.assertEqual(stock.reserved_quantity, Decimal("0.000"))
+
+    def test_distributor_decision_accepts_order_with_delivery_slot_snapshot(self):
+        slot = DistributorDeliverySlot.objects.create(
+            distributor=self.distributor,
+            name="Maniana",
+            start_time="08:00",
+            end_time="12:00",
+            sort_order=1,
+        )
+        self.client.force_authenticate(self.commerce_user)
+        create_response = self.client.post(
+            "/api/orders/",
+            {
+                "delivery_address": "Cliente 1",
+                "line_items": [{"product_id": self.product.id, "quantity": "2.000"}],
+            },
+            format="json",
+        )
+        order_id = create_response.data["id"]
+
+        self.client.force_authenticate(self.distributor_user)
+        response = self.client.patch(
+            f"/api/orders/{order_id}/decision/",
+            {"decision": "ACCEPT", "dispatch_date": (date.today() + timedelta(days=2)).isoformat(), "delivery_slot_id": slot.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "ACCEPTED")
+        self.assertEqual(response.data["delivery_slot"], slot.id)
+        self.assertEqual(response.data["delivery_window_start"], "08:00:00")
+        self.assertEqual(response.data["delivery_window_end"], "12:00:00")
+        order = Order.objects.get(pk=order_id)
+        self.assertEqual(str(order.delivery_window_start), "08:00:00")
+        self.assertEqual(str(order.delivery_window_end), "12:00:00")
+
+    def test_distributor_decision_rejects_order_and_releases_reserved_stock(self):
+        self.client.force_authenticate(self.commerce_user)
+        create_response = self.client.post(
+            "/api/orders/",
+            {
+                "delivery_address": "Cliente 1",
+                "line_items": [{"product_id": self.product.id, "quantity": "2.000"}],
+            },
+            format="json",
+        )
+        stock = StockItem.objects.get(product=self.product)
+        self.assertEqual(stock.reserved_quantity, Decimal("2.000"))
+
+        self.client.force_authenticate(self.distributor_user)
+        response = self.client.patch(f"/api/orders/{create_response.data['id']}/decision/", {"decision": "REJECT"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "REJECTED")
+        stock.refresh_from_db()
         self.assertEqual(stock.reserved_quantity, Decimal("0.000"))
 
     def test_import_products_csv(self):

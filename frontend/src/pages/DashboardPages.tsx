@@ -652,6 +652,41 @@ export function CustomersManagerPage() {
   )
 }
 
+export function DeliverySlotsManagerPage() {
+  return (
+    <ResourceManager
+      title="Franjas de entrega"
+      description="Configura las ventanas horarias que usa tu equipo para aceptar pedidos y armar rutas."
+      endpoint="delivery-slots"
+      createLabel="Agregar franja"
+      fields={[
+        { name: 'name', label: 'Nombre', required: true, placeholder: 'Manana, Tarde, 08 a 12' },
+        { name: 'start_time', label: 'Desde', type: 'time', required: true },
+        { name: 'end_time', label: 'Hasta', type: 'time', required: true },
+        { name: 'sort_order', label: 'Orden', type: 'number', defaultValue: 0, required: true },
+        { name: 'active', label: 'Franja activa', type: 'checkbox', defaultValue: true },
+      ]}
+      columns={[
+        { key: 'name', label: 'Franja' },
+        { key: 'start_time', label: 'Desde', format: (value) => formatTimeValue(value) },
+        { key: 'end_time', label: 'Hasta', format: (value) => formatTimeValue(value) },
+        { key: 'active', label: 'Activa', format: yesNo },
+        { key: 'sort_order', label: 'Orden' },
+      ]}
+      searchKeys={['name', 'start_time', 'end_time']}
+      summary={(rows) => {
+        const active = rows.filter((row) => row.active !== false).length
+        return [
+          { label: 'Franjas activas', value: active },
+          { label: 'Total configuradas', value: rows.length },
+        ]
+      }}
+      emptyTitle="Todavia no hay franjas"
+      emptyText="Crea al menos una franja para poder aceptar pedidos y rutear por ventana horaria."
+    />
+  )
+}
+
 export function VehiclesManagerPage() {
   return (
     <ResourceManager
@@ -1120,9 +1155,9 @@ export function AdminSubscriptionsPage() {
             type: 'select',
             required: true,
             options: [
-              { value: 'START', label: 'START' },
-              { value: 'PRO', label: 'PRO' },
-              { value: 'IA', label: 'IA' },
+              { value: 'Standard', label: 'Standard' },
+              { value: 'Plus', label: 'Plus' },
+              { value: 'Pro', label: 'Pro' },
             ],
           },
           { name: 'price', label: 'Precio mensual', type: 'number', required: true },
@@ -1195,6 +1230,11 @@ export function AdminSubscriptionsPage() {
 
 function yesNo(value: unknown) {
   return value ? 'Si' : 'No'
+}
+
+function formatTimeValue(value: unknown) {
+  const text = String(value ?? '')
+  return text ? text.slice(0, 5) : '-'
 }
 
 function FilterInput({

@@ -14,6 +14,7 @@ class PlanAdmin(admin.ModelAdmin):
         "name",
         "price",
         "description",
+        "features",
         "mp_subscription_url",
         "mp_preapproval_plan_id",
         "is_active",

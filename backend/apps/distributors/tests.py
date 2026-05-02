@@ -1,11 +1,12 @@
 from unittest.mock import patch
+from datetime import time
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.billing.models import Plan, Subscription
-from apps.distributors.models import Distributor, DistributorOnboarding
+from apps.distributors.models import Distributor, DistributorDeliverySlot, DistributorOnboarding
 
 User = get_user_model()
 
@@ -62,11 +63,59 @@ class DistributorAdminFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_distributor_can_manage_delivery_slots(self):
+        distributor = Distributor.objects.create(
+            owner=self.distributor_user,
+            business_name="Distribuidora Franjas",
+            tax_id="30-00000000-2",
+            contact_name="Ventas",
+            email="franjas@test.local",
+            phone="1111-3333",
+            address="Ruta 1",
+        )
+        self.client.force_authenticate(self.distributor_user)
+
+        create_response = self.client.post(
+            "/api/delivery-slots/",
+            {"name": "Maniana", "start_time": "08:00", "end_time": "12:00", "sort_order": 1, "active": True},
+            format="json",
+        )
+        list_response = self.client.get("/api/delivery-slots/")
+        patch_response = self.client.patch(f"/api/delivery-slots/{create_response.data['id']}/", {"active": False}, format="json")
+
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(create_response.data["distributor"], distributor.id)
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.data), 1)
+        self.assertFalse(patch_response.data["active"])
+        self.assertEqual(DistributorDeliverySlot.objects.get(pk=create_response.data["id"]).start_time, time(8, 0))
+
+    def test_delivery_slot_rejects_invalid_window(self):
+        Distributor.objects.create(
+            owner=self.distributor_user,
+            business_name="Distribuidora Franjas",
+            tax_id="30-00000000-3",
+            contact_name="Ventas",
+            email="franjas2@test.local",
+            phone="1111-4444",
+            address="Ruta 2",
+        )
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.post(
+            "/api/delivery-slots/",
+            {"name": "Invalida", "start_time": "12:00", "end_time": "08:00", "sort_order": 1, "active": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("end_time", response.data)
+
 
 class DistributorOnboardingFlowTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.plan = Plan.objects.get(name="PRO")
+        self.plan = Plan.objects.get(name="Pro")
         self.plan.mp_preapproval_plan_id = "pro-plan-id"
         self.plan.mp_subscription_url = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=pro-plan-id"
         self.plan.save(update_fields=["mp_preapproval_plan_id", "mp_subscription_url"])

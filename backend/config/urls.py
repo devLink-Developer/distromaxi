@@ -25,6 +25,7 @@ from apps.billing.views import PlanViewSet, SubscriptionViewSet
 from apps.commerces.views import CommerceViewSet
 from apps.deliveries.views import DeliveryViewSet
 from apps.distributors.views import (
+    DistributorDeliverySlotViewSet,
     DistributorOnboardingPlanSelectionView,
     DistributorOnboardingStateView,
     DistributorSignupView,
@@ -43,6 +44,7 @@ from apps.users.views import AddressGeocodeView, AddressReverseGeocodeView, Cust
 router = DefaultRouter()
 router.register('users', UserViewSet, basename='users')
 router.register('distributors', DistributorViewSet, basename='distributors')
+router.register('delivery-slots', DistributorDeliverySlotViewSet, basename='delivery-slots')
 router.register('commerces', CommerceViewSet, basename='commerces')
 router.register('products', ProductViewSet, basename='products')
 router.register('product-suppliers', ProductSupplierViewSet, basename='product-suppliers')

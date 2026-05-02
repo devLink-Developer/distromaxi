@@ -26,6 +26,8 @@ const inactiveDistributorAccess = {
   distributor_name: null,
   plan_name: null,
   routing_enabled: false,
+  manual_routing_enabled: false,
+  automatic_routing_enabled: false,
 }
 
 const pendingDistributorAccess = {
@@ -34,8 +36,10 @@ const pendingDistributorAccess = {
   onboarding_id: 7,
   distributor_id: null,
   distributor_name: null,
-  plan_name: 'PRO',
+  plan_name: 'Pro',
   routing_enabled: false,
+  manual_routing_enabled: false,
+  automatic_routing_enabled: false,
 }
 
 const activeDistributorAccess = {
@@ -44,8 +48,10 @@ const activeDistributorAccess = {
   onboarding_id: 7,
   distributor_id: 3,
   distributor_name: 'Distribuidora Andina',
-  plan_name: 'PRO',
+  plan_name: 'Pro',
   routing_enabled: true,
+  manual_routing_enabled: true,
+  automatic_routing_enabled: true,
 }
 
 const product: Product = {
@@ -391,9 +397,10 @@ describe('DistroMaxi frontend flows', () => {
       jsonResponse([
         {
           id: 1,
-          name: 'START',
+          name: 'Standard',
           price: '19900.00',
-          description: 'Ideal para comenzar. Gestion basica de pedidos.',
+          description: 'Conexion proveedor-comprador con catalogo, pedidos y ruteo manual.',
+          features: ['Catalogo online', 'Pedidos', 'Ruteo manual'],
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/start',
           mp_preapproval_plan_id: 'start-plan',
@@ -403,9 +410,10 @@ describe('DistroMaxi frontend flows', () => {
         },
         {
           id: 2,
-          name: 'PRO',
+          name: 'Plus',
           price: '49900.00',
-          description: 'Escala tu operacion. Estadisticas avanzadas. Mejor control.',
+          description: 'Dashboard comercial, alertas y reportes exportables.',
+          features: ['Todo Standard', 'Dashboard comercial', 'Reportes exportables'],
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
           mp_preapproval_plan_id: 'pro-plan',
@@ -423,7 +431,7 @@ describe('DistroMaxi frontend flows', () => {
     )
 
     expect(screen.getByText(/empeza a vender online con un plan pensado para tu distribuidora/i)).toBeInTheDocument()
-    expect(await screen.findByText('START')).toBeInTheDocument()
+    expect(await screen.findByText('Standard')).toBeInTheDocument()
     expect(screen.getByText('Mas elegido')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/plans'), expect.any(Object))
   })
@@ -460,9 +468,10 @@ describe('DistroMaxi frontend flows', () => {
             phone: '1111-2222',
             selected_plan: {
               id: 2,
-              name: 'PRO',
+              name: 'Plus',
               price: '49900.00',
               description: 'Escala tu operacion.',
+              features: ['Todo Standard', 'Dashboard comercial'],
               currency: 'ARS',
               mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
               mp_preapproval_plan_id: 'pro-plan',
@@ -485,9 +494,10 @@ describe('DistroMaxi frontend flows', () => {
         return jsonResponse([
           {
             id: 2,
-            name: 'PRO',
+            name: 'Plus',
             price: '49900.00',
             description: 'Escala tu operacion.',
+            features: ['Todo Standard', 'Dashboard comercial'],
             currency: 'ARS',
             mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
             mp_preapproval_plan_id: 'pro-plan',
@@ -523,9 +533,10 @@ describe('DistroMaxi frontend flows', () => {
     const plans = [
       {
         id: 1,
-        name: 'START',
+        name: 'Standard',
         price: '19900.00',
         description: 'Ideal para comenzar. Gestion basica de pedidos.',
+        features: ['Catalogo online', 'Ruteo manual'],
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/start',
         mp_preapproval_plan_id: 'start-plan',
@@ -537,9 +548,10 @@ describe('DistroMaxi frontend flows', () => {
       },
       {
         id: 2,
-        name: 'PRO',
+        name: 'Plus',
         price: '49900.00',
         description: 'Escala tu operacion. Estadisticas avanzadas.',
+        features: ['Todo Standard', 'Dashboard comercial'],
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
         mp_preapproval_plan_id: 'pro-plan',
@@ -703,6 +715,21 @@ describe('DistroMaxi frontend flows', () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input)
       if (url.includes('/route-plans/generate/')) return jsonResponse(routePlan)
+      if (url.includes('/delivery-slots/')) {
+        return jsonResponse([
+          {
+            id: 8,
+            distributor: 1,
+            name: 'Maniana',
+            start_time: '08:00:00',
+            end_time: '12:00:00',
+            active: true,
+            sort_order: 1,
+            created_at: '2026-04-21T10:00:00.000Z',
+            updated_at: '2026-04-21T10:00:00.000Z',
+          },
+        ])
+      }
       if (url.includes('/vehicles/')) {
         return jsonResponse([
           {
@@ -746,6 +773,8 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
+    await screen.findByRole('option', { name: /maniana/i })
+    await userEvent.selectOptions(screen.getByLabelText(/franja horaria/i), '8')
     await userEvent.click(await screen.findByRole('checkbox', { name: /AB123CD/i }))
     const generateButton = screen.getByRole('button', { name: /generar rutas/i })
     await waitFor(() => expect(generateButton).toBeEnabled())
@@ -755,7 +784,7 @@ describe('DistroMaxi frontend flows', () => {
     expect((await screen.findAllByText(/marta chofer/i)).length).toBeGreaterThan(0)
     await waitFor(() => {
       const generateCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/route-plans/generate/'))
-      expect(JSON.parse(String(generateCall?.[1]?.body))).toMatchObject({ vehicle_ids: [4] })
+      expect(JSON.parse(String(generateCall?.[1]?.body))).toMatchObject({ vehicle_ids: [4], delivery_slot_id: 8 })
       expect(JSON.parse(String(generateCall?.[1]?.body))).not.toHaveProperty('vehicle_driver_ids')
     })
   })

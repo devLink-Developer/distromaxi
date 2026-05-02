@@ -12,13 +12,13 @@ class PlanApiTests(TestCase):
         self.client = APIClient()
 
     def test_plans_endpoint_is_public_and_ordered(self):
-        Plan.objects.filter(name="IA").update(is_active=False)
+        Plan.objects.filter(name="Pro").update(is_active=False)
 
         response = self.client.get("/api/plans")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([plan["name"] for plan in response.data], ["START", "PRO"])
-        self.assertTrue(set(response.data[0]).issuperset({"name", "price", "description", "mp_subscription_url", "mp_preapproval_plan_id"}))
+        self.assertEqual([plan["name"] for plan in response.data], ["Standard", "Plus"])
+        self.assertTrue(set(response.data[0]).issuperset({"name", "price", "description", "features", "mp_subscription_url", "mp_preapproval_plan_id"}))
         self.assertTrue(response.data[0]["mp_preapproval_plan_id"])
         self.assertTrue(response.data[1]["is_featured"])
 
@@ -27,6 +27,7 @@ class PlanApiTests(TestCase):
 
         self.assertIn("mp_subscription_url", model_admin.fields)
         self.assertIn("mp_preapproval_plan_id", model_admin.fields)
+        self.assertIn("features", model_admin.fields)
         self.assertIn("is_active", model_admin.fields)
         self.assertIn("sort_order", model_admin.fields)
 
@@ -37,7 +38,7 @@ class PlanApiTests(TestCase):
             full_name="Admin",
             role="ADMIN",
         )
-        plan = Plan.objects.get(name="START")
+        plan = Plan.objects.get(name="Standard")
         new_url = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=start-updated"
 
         self.client.force_authenticate(user=user)
@@ -59,7 +60,7 @@ class PlanApiTests(TestCase):
             full_name="Cliente",
             role="COMMERCE",
         )
-        plan = Plan.objects.get(name="START")
+        plan = Plan.objects.get(name="Standard")
         original_url = plan.mp_subscription_url
 
         self.client.force_authenticate(user=user)

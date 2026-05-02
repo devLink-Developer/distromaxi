@@ -14,6 +14,7 @@ type IconName =
   | 'search'
   | 'pin'
   | 'logout'
+  | 'download'
 
 const paths: Record<IconName, string> = {
   home: 'M3 11.5 12 4l9 7.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5Z',
@@ -31,6 +32,7 @@ const paths: Record<IconName, string> = {
   search: 'M10.5 18a7.5 7.5 0 1 1 5.3-12.8 7.5 7.5 0 0 1-5.3 12.8Zm5.5-2 5 5',
   pin: 'M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   logout: 'M14 8V5a1 1 0 0 0-1-1H5v16h8a1 1 0 0 0 1-1v-3m-2-4h9m0 0-3-3m3 3-3 3',
+  download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3',
 }
 
 export function Icon({ name, className = 'h-5 w-5' }: { name: IconName; className?: string }) {

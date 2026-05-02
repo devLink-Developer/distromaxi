@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -60,6 +61,31 @@ class Distributor(models.Model):
             SubscriptionStatus.TRIAL,
             SubscriptionStatus.ACTIVE,
         }
+
+
+class DistributorDeliverySlot(models.Model):
+    distributor = models.ForeignKey(Distributor, on_delete=models.CASCADE, related_name="delivery_slots")
+    name = models.CharField(max_length=80)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sort_order", "start_time", "id"]
+        unique_together = [("distributor", "name")]
+        indexes = [
+            models.Index(fields=["distributor", "active", "sort_order"]),
+        ]
+
+    def clean(self):
+        if self.start_time and self.end_time and self.start_time >= self.end_time:
+            raise ValidationError({"end_time": "La franja horaria es invalida."})
+
+    def __str__(self):
+        return f"{self.name} ({self.start_time:%H:%M}-{self.end_time:%H:%M})"
 
 
 class DistributorOnboarding(models.Model):

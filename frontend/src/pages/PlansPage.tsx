@@ -188,13 +188,13 @@ export function PlansPage() {
                   <th className="px-4 py-3">Pedidos</th>
                   <th className="px-4 py-3">Estadisticas</th>
                   <th className="px-4 py-3">Rutas</th>
-                  <th className="px-4 py-3">Venta sugerida</th>
+                  <th className="px-4 py-3">Integraciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                <CompareRow plan="START" pedidos="Basico" stats="Inicial" rutas="Manual" venta="No incluida" />
-                <CompareRow plan="PRO" pedidos="Avanzado" stats="Completa" rutas="Control diario" venta="No incluida" />
-                <CompareRow plan="IA" pedidos="Avanzado" stats="Completa" rutas="Optimizada" venta="Incluida" />
+                <CompareRow plan="Standard" pedidos="Catalogo, clientes y stock basico" stats="Inicial" rutas="Manual" venta="CSV/XLS" />
+                <CompareRow plan="Plus" pedidos="Listas de precios y descuentos" stats="Comercial y operativa" rutas="Manual" venta="Preparado para ERP" />
+                <CompareRow plan="Pro" pedidos="Automatizaciones avanzadas" stats="Logistica avanzada" rutas="Manual + automatico" venta="ERP/API y add-ons premium" />
               </tbody>
             </table>
           </div>
@@ -253,10 +253,12 @@ function PlanCard({
   requiresSignup: boolean
   onSelect: (plan: Plan) => Promise<void>
 }) {
-  const benefits = plan.description
-    .split('.')
-    .map((benefit) => benefit.trim())
-    .filter(Boolean)
+  const benefits = plan.features?.length
+    ? plan.features
+    : plan.description
+        .split('.')
+        .map((benefit) => benefit.trim())
+        .filter(Boolean)
   const featured = plan.is_featured || highlighted
   const unavailable = !plan.mp_subscription_url || !plan.mp_preapproval_plan_id
   const isDisabled = loading || (!activeDistributor && unavailable)
