@@ -82,6 +82,28 @@ class InventoryIntelligenceTests(TestCase):
         self.assertEqual(response.data[0]["stock_item_id"], self.stock_item.id)
         self.assertEqual(response.data[0]["recommended_qty"], "12.000")
 
+    def test_stock_summary_includes_products_without_stock_item(self):
+        product_without_stock = Product.objects.create(
+            distributor=self.distributor,
+            supplier=self.supplier,
+            sku="SKU-ZERO",
+            name="Producto sin stock inicial",
+            category="Bebidas",
+            unit="bulto",
+            price=Decimal("500.00"),
+        )
+
+        response = self.client.get("/api/stock/summary/?days=30")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["kpis"]["total_skus"], 2)
+        row = next(item for item in response.data["rows"] if item["sku"] == "SKU-ZERO")
+        self.assertEqual(row["quantity"], "0.000")
+        self.assertEqual(row["reserved_quantity"], "0.000")
+        self.assertEqual(row["available_quantity"], "0.000")
+        self.assertEqual(row["urgency"], "out_of_stock")
+        self.assertTrue(StockItem.objects.filter(product=product_without_stock).exists())
+
     def test_cycle_count_creates_adjustment_movement(self):
         response = self.client.post(
             f"/api/stock/{self.stock_item.id}/cycle-count/",

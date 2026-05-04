@@ -52,6 +52,8 @@ def stock_health_summary(distributor, *, days=30):
         days = max(1, int(days or 30))
     except (TypeError, ValueError):
         days = 30
+    distributor = _resolve_distributor(distributor)
+    _ensure_product_stock_items(distributor)
     sold_by_product = _recent_sales_by_product(distributor, days)
     rows = [
         _stock_health_row(item, sold_by_product.get(item.product_id, Decimal("0")), days)
@@ -77,6 +79,38 @@ def replenishment_suggestions(distributor, *, days=30):
     urgency_order = {"out_of_stock": 0, "critical": 1, "warning": 2, "low": 3, "ok": 4}
     rows = [row for row in summary["rows"] if Decimal(row["recommended_qty"]) > 0 or row["urgency"] in {"out_of_stock", "critical"}]
     return sorted(rows, key=lambda row: (urgency_order.get(row["urgency"], 9), row["supplier_name"] or "", row["product_name"]))
+
+
+@transaction.atomic
+def _ensure_product_stock_items(distributor):
+    from apps.products.models import Product
+
+    warehouse = ensure_default_warehouse(distributor)
+    stocked_product_ids = set(
+        StockItem.objects.filter(distributor=distributor).values_list("product_id", flat=True)
+    )
+    missing_products = Product.objects.filter(distributor=distributor).exclude(id__in=stocked_product_ids)
+    StockItem.objects.bulk_create(
+        [
+            StockItem(
+                distributor=distributor,
+                warehouse=warehouse,
+                product=product,
+                quantity=Decimal("0.000"),
+                reserved_quantity=Decimal("0.000"),
+            )
+            for product in missing_products
+        ],
+        ignore_conflicts=True,
+    )
+
+
+def _resolve_distributor(distributor):
+    if hasattr(distributor, "pk"):
+        return distributor
+    from apps.distributors.models import Distributor
+
+    return Distributor.objects.get(pk=distributor)
 
 
 @transaction.atomic
