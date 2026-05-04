@@ -364,6 +364,35 @@ class RoutingFlowTests(TestCase):
         self.assertEqual(response.data[0]["delivery_slot_name"], "Maniana")
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
+    def test_route_plan_list_filters_by_delivery_slot(self):
+        morning = DistributorDeliverySlot.objects.create(distributor=self.distributor, name="Maniana", start_time="08:00", end_time="12:00", sort_order=1)
+        afternoon = DistributorDeliverySlot.objects.create(distributor=self.distributor, name="Tarde", start_time="13:00", end_time="17:00", sort_order=2)
+        morning_plan = RoutePlan.objects.create(
+            distributor=self.distributor,
+            dispatch_date=self.order.dispatch_date,
+            delivery_slot=morning,
+            delivery_window_start=morning.start_time,
+            delivery_window_end=morning.end_time,
+            total_orders=1,
+        )
+        RoutePlan.objects.create(
+            distributor=self.distributor,
+            dispatch_date=self.order.dispatch_date,
+            delivery_slot=afternoon,
+            delivery_window_start=afternoon.start_time,
+            delivery_window_end=afternoon.end_time,
+            total_orders=1,
+        )
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.get(f"/api/route-plans/?dispatch_date={self.order.dispatch_date.isoformat()}&delivery_slot_id={morning.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["id"] for item in response.data], [morning_plan.id])
+        self.assertEqual(response.data[0]["delivery_slot"], morning.id)
+        self.assertEqual(response.data[0]["delivery_slot_name"], "Maniana")
+
+    @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
     def test_manual_route_uses_delivery_slot_snapshot(self):
         slot = DistributorDeliverySlot.objects.create(distributor=self.distributor, name="Maniana", start_time="08:00", end_time="12:00", sort_order=1)
         self.order.delivery_slot = slot

@@ -150,6 +150,8 @@ export type Product = {
   caracteristicas: string
   image_url: string
   stock_minimum: string
+  stock_target: string
+  replenishment_multiple: string
   stock_on_hand: string
   stock_available: string
   low_stock: boolean
@@ -164,6 +166,7 @@ export type ProductSupplier = {
   contact_name: string
   phone: string
   email: string
+  lead_time_days: number
   active: boolean
 }
 
@@ -214,13 +217,67 @@ export type Commerce = {
 
 export type StockItem = {
   id: number
+  distributor?: number
+  warehouse: number
   warehouse_name: string
+  product: number
   product_name: string
   sku: string
   quantity: string
   reserved_quantity: string
   available_quantity: string
   is_low: boolean
+  updated_at?: string
+}
+
+export type StockUrgency = 'out_of_stock' | 'critical' | 'warning' | 'low' | 'ok'
+
+export type StockSummaryRow = {
+  id: number
+  stock_item_id: number
+  warehouse: number
+  warehouse_name: string
+  product: number
+  product_name: string
+  sku: string
+  supplier: number | null
+  supplier_name: string
+  category: number | null
+  category_name: string
+  subcategory_name: string
+  unit: string
+  quantity: string
+  reserved_quantity: string
+  available_quantity: string
+  stock_minimum: string
+  stock_target: string
+  replenishment_multiple: string
+  sold_30d: string
+  daily_sales: string
+  coverage_days: string | null
+  lead_time_days: number
+  recommended_qty: string
+  urgency: StockUrgency
+  reason: string
+  is_low: boolean
+  updated_at: string
+}
+
+export type StockSummary = {
+  kpis: {
+    total_skus: number
+    out_of_stock: number
+    low_stock: number
+    reserved_units: string
+    suggested_skus: number
+    suggested_units: string
+  }
+  rows: StockSummaryRow[]
+}
+
+export type CycleCountResponse = {
+  stock_item: StockItem
+  difference: string
 }
 
 export type Vehicle = {

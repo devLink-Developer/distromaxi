@@ -12,11 +12,11 @@ import { useFeedbackStore } from '../../stores/feedbackStore'
 import type { Product } from '../../types/domain'
 import { LoginPage, RegisterPage } from '../AuthPages'
 import { CartPage, CheckoutPage, DistributorCatalogPage, HomePage } from '../CommercePages'
-import { AdminSubscriptionsPage } from '../DashboardPages'
+import { AdminSubscriptionsPage, StockPage } from '../DashboardPages'
 import { DriverDeliveriesPage } from '../DriverPages'
 import { DistributorRegisterPage } from '../DistributorOnboardingPages'
 import { PlansPage } from '../PlansPage'
-import { DashboardRoutingPage } from '../RoutingPages'
+import { DashboardOrdersRoutingPage, DashboardRoutingPage } from '../RoutingPages'
 
 const inactiveDistributorAccess = {
   state: 'NONE' as const,
@@ -93,6 +93,8 @@ const product: Product = {
   caracteristicas: '',
   image_url: '',
   stock_minimum: '10.000',
+  stock_target: '30.000',
+  replenishment_multiple: '6.000',
   stock_on_hand: '120.000',
   stock_available: '120.000',
   low_stock: false,
@@ -201,6 +203,74 @@ const currentRoute = {
   load_m3: '0.300000',
   active_stop_id: 31,
   stops: routePlan.runs[0].stops,
+}
+
+const customerSummaryOrder = {
+  id: 10,
+  commerce: 1,
+  commerce_name: 'Almacen Luna',
+  distributor: 1,
+  distributor_name: 'Distribuidora Andina',
+  total: '3250.00',
+  status: 'PENDING',
+  dispatch_date: '2026-04-22',
+  delivery_slot: null,
+  delivery_slot_name: null,
+  delivery_slot_start_time: null,
+  delivery_slot_end_time: null,
+  delivery_address: 'Humboldt 1400, CABA',
+  delivery_latitude: '-34.5841000',
+  delivery_longitude: '-58.4351000',
+  delivery_window_start: '08:00:00',
+  delivery_window_end: '14:00:00',
+  notes: '',
+  items: [],
+  created_at: '2026-04-21T10:00:00.000Z',
+  updated_at: '2026-04-21T10:00:00.000Z',
+}
+
+const customerSummaryCommerce = {
+  id: 1,
+  distributor: 1,
+  distributor_name: 'Distribuidora Andina',
+  trade_name: 'Almacen Luna',
+  legal_name: 'Almacen Luna SRL',
+  tax_id: '30-12345678-9',
+  contact_name: 'Clara Luna',
+  email: 'compras@luna.local',
+  phone: '1111-2222',
+  postal_code: '1414',
+  address: 'Humboldt 1400',
+  city: 'CABA',
+  province: 'Buenos Aires',
+  latitude: '-34.5841000',
+  longitude: '-58.4351000',
+  default_window_start: '08:00:00',
+  default_window_end: '14:00:00',
+  delivery_notes: 'Recibe por puerta lateral.',
+  active: true,
+}
+
+function pendingRouteOrder(id: number, commerceName: string, plannedWeightKg: string, plannedVolumeM3: string) {
+  return {
+    id,
+    commerce: id,
+    commerce_name: commerceName,
+    status: 'ACCEPTED',
+    dispatch_date: '2026-04-22',
+    delivery_slot: 8,
+    delivery_slot_name: 'Maniana',
+    delivery_window_start: '08:00:00',
+    delivery_window_end: '12:00:00',
+    delivery_address: `${commerceName} 123`,
+    address_snapshot: {},
+    lat: '-34.5841000',
+    lng: '-58.4351000',
+    planned_weight_kg: plannedWeightKg,
+    planned_volume_m3: plannedVolumeM3,
+    routable: true,
+    exclusion_reason: '',
+  }
 }
 
 function jsonResponse(data: unknown) {
@@ -711,10 +781,176 @@ describe('DistroMaxi frontend flows', () => {
     })
   })
 
-  it('generates route drafts from the routing dashboard', async () => {
+  it('opens a customer summary modal from the orders dashboard', async () => {
     vi.mocked(fetch).mockImplementation((input) => {
       const url = String(input)
-      if (url.includes('/route-plans/generate/')) return jsonResponse(routePlan)
+      if (url.includes('/orders/')) return jsonResponse([customerSummaryOrder])
+      if (url.includes('/commerces/')) return jsonResponse([customerSummaryCommerce])
+      if (url.includes('/delivery-slots/')) return jsonResponse([])
+      return jsonResponse([])
+    })
+
+    renderWithFeedback(
+      <MemoryRouter>
+        <DashboardOrdersRoutingPage />
+      </MemoryRouter>,
+    )
+
+    const customerButtons = await screen.findAllByRole('button', { name: /ver datos del cliente almacen luna/i })
+    await userEvent.click(customerButtons[0])
+
+    const dialog = screen.getByRole('dialog', { name: /almacen luna/i })
+    expect(dialog).toBeInTheDocument()
+    expect(screen.getByText('Almacen Luna SRL')).toBeInTheDocument()
+    expect(screen.getByText('Clara Luna')).toBeInTheDocument()
+    expect(screen.getByText('compras@luna.local')).toBeInTheDocument()
+    expect(screen.getByText('Recibe por puerta lateral.')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /cerrar datos del cliente/i }))
+    expect(screen.queryByRole('dialog', { name: /almacen luna/i })).not.toBeInTheDocument()
+  })
+
+  it('shows intelligent stock suggestions and records cycle counts', async () => {
+    const criticalStockRow = {
+      id: 41,
+      stock_item_id: 41,
+      warehouse: 3,
+      warehouse_name: 'Central',
+      product: 9,
+      product_name: 'Gaseosa cola x 12',
+      sku: 'SKU-LOW',
+      supplier: 5,
+      supplier_name: 'Proveedor Norte',
+      category: 2,
+      category_name: 'Bebidas',
+      subcategory_name: '',
+      unit: 'bulto',
+      quantity: '3.000',
+      reserved_quantity: '1.000',
+      available_quantity: '2.000',
+      stock_minimum: '5.000',
+      stock_target: '10.000',
+      replenishment_multiple: '6.000',
+      sold_30d: '30.000',
+      daily_sales: '1.000',
+      coverage_days: '2.0',
+      lead_time_days: 5,
+      recommended_qty: '12.000',
+      urgency: 'critical',
+      reason: 'Disponible por debajo del minimo configurado.',
+      is_low: true,
+      updated_at: '2026-04-21T10:00:00.000Z',
+    }
+    const normalStockRow = {
+      ...criticalStockRow,
+      id: 42,
+      stock_item_id: 42,
+      product: 10,
+      product_name: 'Aceite girasol x 6',
+      sku: 'SKU-OK',
+      quantity: '40.000',
+      reserved_quantity: '4.000',
+      available_quantity: '36.000',
+      recommended_qty: '0.000',
+      urgency: 'ok',
+      reason: 'Stock dentro del objetivo.',
+      is_low: false,
+    }
+    const summary = {
+      kpis: {
+        total_skus: 2,
+        out_of_stock: 0,
+        low_stock: 1,
+        reserved_units: '5.000',
+        suggested_skus: 1,
+        suggested_units: '12.000',
+      },
+      rows: [criticalStockRow, normalStockRow],
+    }
+
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/stock/41/cycle-count/')) {
+        return jsonResponse({
+          stock_item: {
+            id: 41,
+            distributor: 1,
+            warehouse: 3,
+            warehouse_name: 'Central',
+            product: 9,
+            product_name: 'Gaseosa cola x 12',
+            sku: 'SKU-LOW',
+            quantity: '7.000',
+            reserved_quantity: '1.000',
+            available_quantity: '6.000',
+            is_low: false,
+            updated_at: '2026-04-21T10:05:00.000Z',
+          },
+          difference: '4.000',
+        })
+      }
+      if (url.includes('/stock/summary/')) return jsonResponse(summary)
+      if (url.includes('/stock/replenishment/')) return jsonResponse([criticalStockRow])
+      if (url.includes('/product-suppliers/')) {
+        return jsonResponse([
+          {
+            id: 5,
+            distributor: 1,
+            distributor_name: 'Distribuidora Andina',
+            name: 'Proveedor Norte',
+            contact_name: 'Compras',
+            phone: '111',
+            email: 'compras@norte.local',
+            lead_time_days: 5,
+            active: true,
+          },
+        ])
+      }
+      return jsonResponse([])
+    })
+
+    renderWithFeedback(
+      <MemoryRouter>
+        <StockPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/stock inteligente/i)).toBeInTheDocument()
+    expect((await screen.findAllByText('Gaseosa cola x 12')).length).toBeGreaterThan(0)
+    expect(screen.getByText('Aceite girasol x 6')).toBeInTheDocument()
+    expect(screen.getByText(/Disponible por debajo del minimo configurado/i)).toBeInTheDocument()
+    expect(screen.getByText(/12 unidades/i)).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText(/urgencia/i), 'critical')
+    expect(screen.queryByText('Aceite girasol x 6')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /contar/i }))
+    expect(screen.getByRole('dialog', { name: /conteo fisico/i })).toBeInTheDocument()
+    const countedInput = screen.getByLabelText(/cantidad fisica/i)
+    await userEvent.clear(countedInput)
+    await userEvent.type(countedInput, '7')
+    await userEvent.click(screen.getByRole('button', { name: /guardar ajuste/i }))
+
+    await waitFor(() => {
+      const cycleCountCall = vi
+        .mocked(fetch)
+        .mock.calls.find(([url, options]) => String(url).includes('/stock/41/cycle-count/') && options?.method === 'POST')
+      expect(cycleCountCall).toBeTruthy()
+      expect(JSON.parse(String(cycleCountCall?.[1]?.body))).toMatchObject({ counted_quantity: '7' })
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/stock/summary/?days=30'))).toBe(true)
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/stock/replenishment/?days=30'))).toBe(true)
+    })
+    expect(await screen.findByText(/conteo fisico registrado/i)).toBeInTheDocument()
+  })
+
+  it('generates route drafts from the routing dashboard', async () => {
+    let generated = false
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/route-plans/generate/')) {
+        generated = true
+        return jsonResponse(routePlan)
+      }
       if (url.includes('/delivery-slots/')) {
         return jsonResponse([
           {
@@ -763,7 +999,8 @@ describe('DistroMaxi frontend flows', () => {
           },
         ])
       }
-      if (url.includes('/route-plans/')) return jsonResponse([])
+      if (url.includes('/route-plans/pending-orders/')) return jsonResponse(generated ? [] : [pendingRouteOrder(20, 'Almacen Sol', '10.000', '1.000000')])
+      if (url.includes('/route-plans/')) return jsonResponse(generated ? [routePlan] : [])
       return jsonResponse([])
     })
 
@@ -786,7 +1023,119 @@ describe('DistroMaxi frontend flows', () => {
       const generateCall = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/route-plans/generate/'))
       expect(JSON.parse(String(generateCall?.[1]?.body))).toMatchObject({ vehicle_ids: [4], delivery_slot_id: 8 })
       expect(JSON.parse(String(generateCall?.[1]?.body))).not.toHaveProperty('vehicle_driver_ids')
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/route-plans/?') && String(url).includes('dispatch_date=') && String(url).includes('delivery_slot_id=8'))).toBe(true)
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/route-plans/pending-orders/?') && String(url).includes('dispatch_date=') && String(url).includes('delivery_slot_id=8'))).toBe(true)
     })
+  })
+
+  it('summarizes only orders from the selected routing date and slot', async () => {
+    const morningPlan = {
+      ...routePlan,
+      delivery_slot: 8,
+      delivery_slot_name: 'Maniana',
+      delivery_window_start: '08:00:00',
+      delivery_window_end: '12:00:00',
+    }
+    const afternoonPlan = {
+      ...routePlan,
+      id: 12,
+      route_number: null,
+      delivery_slot: 9,
+      delivery_slot_name: 'Tarde',
+      delivery_window_start: '13:00:00',
+      delivery_window_end: '17:00:00',
+      total_load_kg: '6.000',
+      total_load_m3: '0.200000',
+      runs: [
+        {
+          ...routePlan.runs[0],
+          id: 22,
+          load_kg: '6.000',
+          load_m3: '0.200000',
+          stops: [
+            {
+              ...routePlan.runs[0].stops[0],
+              id: 32,
+              order: 30,
+              commerce_name: 'Comercio Tarde',
+              demand_kg: '6.000',
+              demand_m3: '0.200000',
+            },
+          ],
+        },
+      ],
+    }
+
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/delivery-slots/')) {
+        return jsonResponse([
+          {
+            id: 8,
+            distributor: 1,
+            name: 'Maniana',
+            start_time: '08:00:00',
+            end_time: '12:00:00',
+            active: true,
+            sort_order: 1,
+            created_at: '2026-04-21T10:00:00.000Z',
+            updated_at: '2026-04-21T10:00:00.000Z',
+          },
+          {
+            id: 9,
+            distributor: 1,
+            name: 'Tarde',
+            start_time: '13:00:00',
+            end_time: '17:00:00',
+            active: true,
+            sort_order: 2,
+            created_at: '2026-04-21T10:00:00.000Z',
+            updated_at: '2026-04-21T10:00:00.000Z',
+          },
+        ])
+      }
+      if (url.includes('/vehicles/')) return jsonResponse([])
+      if (url.includes('/drivers/')) return jsonResponse([])
+      if (url.includes('/route-plans/pending-orders/')) {
+        const params = new URL(url, 'http://distromax.test').searchParams
+        return jsonResponse(
+          params.get('delivery_slot_id') === '8'
+            ? [
+                pendingRouteOrder(10, 'Almacen Luna', '8.000', '0.300000'),
+                pendingRouteOrder(20, 'Almacen Sol', '10.000', '1.000000'),
+              ]
+            : [],
+        )
+      }
+      if (url.includes('/route-plans/')) {
+        const params = new URL(url, 'http://distromax.test').searchParams
+        return jsonResponse(params.get('delivery_slot_id') === '8' ? [morningPlan] : [afternoonPlan])
+      }
+      return jsonResponse([])
+    })
+
+    renderWithFeedback(
+      <MemoryRouter>
+        <DashboardRoutingPage />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('option', { name: /maniana/i })
+    await userEvent.selectOptions(screen.getByLabelText(/franja horaria/i), '8')
+
+    expect(await screen.findByText(/pedidos filtrados: 2/i)).toBeInTheDocument()
+    expect(screen.getByText(/carga filtrada: 18 kg - 1,3 m3/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/route-plans/?') && String(url).includes('dispatch_date=') && String(url).includes('delivery_slot_id=8'))).toBe(true)
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/route-plans/pending-orders/?') && String(url).includes('dispatch_date=') && String(url).includes('delivery_slot_id=8'))).toBe(true)
+    })
+
+    await userEvent.selectOptions(screen.getByLabelText(/franja horaria/i), '9')
+
+    expect(await screen.findByText(/pedidos filtrados: 1/i)).toBeInTheDocument()
+    expect(screen.getByText(/carga filtrada: 6 kg - 0,2 m3/i)).toBeInTheDocument()
+    expect(screen.getByText(/comercio tarde/i)).toBeInTheDocument()
+    expect(screen.queryByText(/almacen sol/i)).not.toBeInTheDocument()
   })
 
   it('renders the driver current route instead of a flat deliveries list', async () => {

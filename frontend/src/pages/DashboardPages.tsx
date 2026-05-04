@@ -17,6 +17,7 @@ import {
 
 import { AddressEditor } from '../components/AddressEditor'
 import { EmptyState } from '../components/EmptyState'
+import { Icon } from '../components/Icon'
 import { ResourceManager, type FieldConfig, type ResourceRow } from '../components/ResourceManager'
 import { StatusBadge } from '../components/StatusBadge'
 import { useDashboard } from '../hooks/useDashboard'
@@ -31,7 +32,9 @@ import type {
   ProductCategory,
   ProductSubCategory,
   ProductSupplier,
-  StockItem,
+  StockSummary,
+  StockSummaryRow,
+  StockUrgency,
   User,
 } from '../types/domain'
 
@@ -83,7 +86,7 @@ const productFormSections = [
   {
     title: 'Comercial',
     description: 'Precio, costo y descuento vigente para venta mayorista.',
-    fields: ['price', 'cost', 'discount_percent', 'discount_name', 'stock_minimum'],
+    fields: ['price', 'cost', 'discount_percent', 'discount_name', 'stock_minimum', 'stock_target', 'replenishment_multiple'],
   },
   {
     title: 'Logistica',
@@ -399,11 +402,13 @@ export function ProductsManagerPage() {
                 { name: 'contact_name', label: 'Contacto' },
                 { name: 'phone', label: 'Telefono' },
                 { name: 'email', label: 'Email', type: 'email' },
+                { name: 'lead_time_days', label: 'Plazo reposicion dias', type: 'number', defaultValue: 0, min: 0, step: 1 },
                 { name: 'active', label: 'Activo', type: 'checkbox', defaultValue: true },
               ]}
               columns={[
                 { key: 'name', label: 'Proveedor' },
                 { key: 'contact_name', label: 'Contacto' },
+                { key: 'lead_time_days', label: 'Lead time', format: (value) => `${num(value)} dias` },
                 { key: 'active', label: 'Activo', format: yesNo },
               ]}
             />
@@ -580,6 +585,8 @@ function productManagerFields(
     { name: 'discount_percent', label: 'Porc. descuento', type: 'number', defaultValue: 0, min: 0, max: 100, step: 0.01 },
     { name: 'discount_name', label: 'Nombre descuento' },
     { name: 'stock_minimum', label: 'Stock minimo', type: 'number', min: 0, step: 0.001 },
+    { name: 'stock_target', label: 'Stock objetivo', type: 'number', min: 0, step: 0.001 },
+    { name: 'replenishment_multiple', label: 'Lote minimo compra', type: 'number', min: 0, step: 0.001 },
     { name: 'units_per_package', label: 'Unidades por bulto', type: 'number', required: true, defaultValue: 1, min: 1, step: 1 },
     { name: 'packages_per_pallet', label: 'Bultos por pallet', type: 'number', min: 0, step: 1 },
     { name: 'units_per_pallet', label: 'Unidades por pallet', type: 'number', min: 0, step: 1 },
@@ -741,37 +748,494 @@ export function DriversManagerPage() {
 }
 
 export function StockPage() {
-  const [stock, setStock] = useState<StockItem[]>([])
+  const [summary, setSummary] = useState<StockSummary | null>(null)
+  const [suggestions, setSuggestions] = useState<StockSummaryRow[]>([])
+  const [suppliers, setSuppliers] = useState<ProductSupplier[]>([])
+  const [days, setDays] = useState('30')
+  const [query, setQuery] = useState('')
+  const [urgency, setUrgency] = useState<'all' | StockUrgency>('all')
+  const [supplier, setSupplier] = useState('all')
+  const [warehouse, setWarehouse] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [countingItem, setCountingItem] = useState<StockSummaryRow | null>(null)
+  const [countedQuantity, setCountedQuantity] = useState('')
+  const [countNote, setCountNote] = useState('')
+  const [savingCount, setSavingCount] = useState(false)
+  const showError = useFeedbackStore((state) => state.error)
+  const showSuccess = useFeedbackStore((state) => state.success)
+
+  async function loadStock(nextDays = days) {
+    setLoading(true)
+    try {
+      const rangeDays = Number(nextDays) || 30
+      const [nextSummary, nextSuggestions, nextSuppliers] = await Promise.all([
+        api.stockSummary(rangeDays),
+        api.stockReplenishment(rangeDays),
+        api.productSuppliers(),
+      ])
+      setSummary(nextSummary)
+      setSuggestions(nextSuggestions)
+      setSuppliers(nextSuppliers)
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'No se pudo cargar el stock inteligente')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    void api.stock().then(setStock)
-  }, [])
+    void loadStock(days)
+  }, [days])
+
+  const rows = summary?.rows ?? []
+  const filteredRows = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    return rows.filter((row) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [row.product_name, row.sku, row.supplier_name, row.category_name, row.warehouse_name]
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedQuery)
+      const matchesUrgency = urgency === 'all' || row.urgency === urgency
+      const matchesSupplier = supplier === 'all' || String(row.supplier ?? '') === supplier
+      const matchesWarehouse = warehouse === 'all' || String(row.warehouse) === warehouse
+      return matchesQuery && matchesUrgency && matchesSupplier && matchesWarehouse
+    })
+  }, [query, rows, supplier, urgency, warehouse])
+
+  const supplierOptions = useMemo(() => {
+    const options = new Map<string, string>()
+    suppliers.forEach((item) => {
+      if (item.active !== false) options.set(String(item.id), item.name)
+    })
+    rows.forEach((row) => {
+      if (row.supplier) options.set(String(row.supplier), row.supplier_name)
+    })
+    return [...options.entries()].sort((left, right) => left[1].localeCompare(right[1], 'es'))
+  }, [rows, suppliers])
+
+  const warehouseOptions = useMemo(() => {
+    const options = new Map<string, string>()
+    rows.forEach((row) => options.set(String(row.warehouse), row.warehouse_name))
+    return [...options.entries()].sort((left, right) => left[1].localeCompare(right[1], 'es'))
+  }, [rows])
+
+  const filteredSuggestions = useMemo(() => {
+    const stockIds = new Set(filteredRows.map((row) => row.stock_item_id))
+    return suggestions.filter((row) => stockIds.has(row.stock_item_id)).slice(0, 8)
+  }, [filteredRows, suggestions])
+
+  const filteredTotals = useMemo(() => {
+    return filteredRows.reduce(
+      (acc, row) => ({
+        available: acc.available + asNumber(row.available_quantity),
+        reserved: acc.reserved + asNumber(row.reserved_quantity),
+        suggested: acc.suggested + asNumber(row.recommended_qty),
+      }),
+      { available: 0, reserved: 0, suggested: 0 },
+    )
+  }, [filteredRows])
+
+  function openCycleCount(row: StockSummaryRow) {
+    setCountingItem(row)
+    setCountedQuantity(String(row.quantity))
+    setCountNote('')
+  }
+
+  async function submitCycleCount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!countingItem) return
+    setSavingCount(true)
+    try {
+      await api.cycleCountStock(countingItem.stock_item_id, {
+        counted_quantity: countedQuantity,
+        note: countNote.trim(),
+      })
+      setCountingItem(null)
+      showSuccess('Conteo fisico registrado y stock ajustado.')
+      await loadStock(days)
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'No se pudo registrar el conteo')
+    } finally {
+      setSavingCount(false)
+    }
+  }
+
   return (
-    <section className="grid gap-5">
-      <div>
-        <h1 className="text-2xl font-800 text-slate-950">Stock</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Revisa existencias, reservas y disponibilidad.</p>
+    <section className="grid gap-4 text-sm text-slate-700">
+      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-[11px] font-800 uppercase text-brand-700">Inventario</p>
+          <h1 className="mt-1 text-2xl font-800 text-slate-950">Stock inteligente</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Prioriza reposicion, quiebres, reservas y conteos fisicos desde la misma vista operativa.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="min-h-10 rounded-md border border-slate-300 px-3 text-xs font-800 text-slate-700 disabled:opacity-60"
+            disabled={loading}
+            type="button"
+            onClick={() => void loadStock(days)}
+          >
+            Actualizar
+          </button>
+        </div>
       </div>
-      <div className="grid gap-3">
-        {stock.map((item) => (
-          <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-800 uppercase text-brand-700">{item.sku}</p>
-                <h2 className="mt-1 text-lg font-800 text-slate-950">{item.product_name}</h2>
-                <p className="text-sm text-slate-600">{item.warehouse_name}</p>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+        <StockKpi label="SKUs controlados" value={num(summary?.kpis.total_skus)} hint={`${filteredRows.length} visibles`} />
+        <StockKpi label="Sin stock" value={num(summary?.kpis.out_of_stock)} hint="Sin disponible para venta" tone="danger" />
+        <StockKpi label="Criticos y bajos" value={num(summary?.kpis.low_stock)} hint="Requieren revision" tone="warning" />
+        <StockKpi label="Unidades reservadas" value={num(summary?.kpis.reserved_units)} hint="Comprometidas en pedidos" />
+        <StockKpi label="SKUs a reponer" value={num(summary?.kpis.suggested_skus)} hint={`${num(summary?.kpis.suggested_units)} unidades`} tone="warning" />
+        <StockKpi label="Reposicion filtrada" value={num(filteredTotals.suggested)} hint={`${num(filteredTotals.available)} disp. / ${num(filteredTotals.reserved)} res.`} />
+      </div>
+
+      <div className="grid gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-soft md:grid-cols-2 xl:grid-cols-[1.4fr_0.8fr_0.8fr_0.8fr_0.6fr]">
+        <label className="grid gap-1 text-[12px] font-800 text-slate-600">
+          Buscar SKU o producto
+          <span className="relative">
+            <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="min-h-10 w-full rounded-md border border-slate-300 pl-9 pr-3 text-[13px] font-700 text-slate-950"
+              placeholder="Producto, proveedor, categoria"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </span>
+        </label>
+        <StockSelect label="Urgencia" value={urgency} onChange={(value) => setUrgency(value as 'all' | StockUrgency)}>
+          <option value="all">Todas</option>
+          {stockUrgencyOptions.map((option) => (
+            <option key={option} value={option}>
+              {stockUrgencyLabels[option]}
+            </option>
+          ))}
+        </StockSelect>
+        <StockSelect label="Proveedor" value={supplier} onChange={setSupplier}>
+          <option value="all">Todos</option>
+          {supplierOptions.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </StockSelect>
+        <StockSelect label="Deposito" value={warehouse} onChange={setWarehouse}>
+          <option value="all">Todos</option>
+          {warehouseOptions.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </StockSelect>
+        <StockSelect label="Ventas" value={days} onChange={setDays}>
+          <option value="7">7 dias</option>
+          <option value="15">15 dias</option>
+          <option value="30">30 dias</option>
+          <option value="60">60 dias</option>
+          <option value="90">90 dias</option>
+        </StockSelect>
+      </div>
+
+      <section className="grid gap-3 xl:grid-cols-[0.95fr_1.55fr]">
+        <div className="rounded-lg border border-slate-200 bg-white shadow-soft">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <h2 className="text-base font-800 text-slate-950">Reposicion sugerida</h2>
+            <p className="mt-1 text-[13px] leading-5 text-slate-600">
+              Compra recomendada por cobertura, minimo, objetivo y reservas.
+            </p>
+          </div>
+          <div className="grid gap-2 p-3">
+            {loading && !summary ? (
+              <p className="p-3 text-[13px] font-800 text-slate-500">Cargando sugerencias...</p>
+            ) : filteredSuggestions.length === 0 ? (
+              <EmptyState title="Sin sugerencias para el filtro" text="No hay SKUs con reposicion pendiente en esta seleccion." />
+            ) : (
+              filteredSuggestions.map((row) => (
+                <article key={row.stock_item_id} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-800 uppercase text-brand-700">{row.sku}</p>
+                      <h3 className="truncate text-[13px] font-800 text-slate-950">{row.product_name}</h3>
+                      <p className="mt-1 truncate text-[12px] text-slate-500">{row.supplier_name || 'Sin proveedor'}</p>
+                    </div>
+                    <StockUrgencyBadge urgency={row.urgency} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-[12px]">
+                    <StockTinyMetric label="Comprar" value={num(row.recommended_qty)} strong />
+                    <StockTinyMetric label="Disponible" value={num(row.available_quantity)} />
+                    <StockTinyMetric label="Cobertura" value={coverageLabel(row)} />
+                  </div>
+                  <p className="mt-3 text-[12px] leading-5 text-slate-600">{row.reason}</p>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
+          <div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-base font-800 text-slate-950">Inventario por SKU y deposito</h2>
+              <p className="mt-1 text-[13px] leading-5 text-slate-600">
+                Disponible vendible, reservado por pedidos, existencia total y conteo ciclico.
+              </p>
+            </div>
+            <span className="w-fit rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-800 uppercase text-slate-600">
+              {filteredRows.length}/{rows.length} filas
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-left text-[12px]">
+              <thead className="bg-slate-100 text-[11px] font-800 uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Producto</th>
+                  <th className="px-3 py-2">Deposito</th>
+                  <th className="px-3 py-2 text-right">Disponible</th>
+                  <th className="px-3 py-2 text-right">Reservado</th>
+                  <th className="px-3 py-2 text-right">Total</th>
+                  <th className="px-3 py-2 text-right">Cobertura</th>
+                  <th className="px-3 py-2 text-right">Comprar</th>
+                  <th className="px-3 py-2">Alerta</th>
+                  <th className="px-3 py-2 text-right">Conteo</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading && !summary ? (
+                  <tr>
+                    <td className="px-3 py-5 font-800 text-slate-500" colSpan={9}>
+                      Cargando stock...
+                    </td>
+                  </tr>
+                ) : filteredRows.length === 0 ? (
+                  <tr>
+                    <td className="px-3 py-5 text-slate-500" colSpan={9}>
+                      No hay stock para los filtros aplicados.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRows.map((row) => (
+                    <tr key={row.stock_item_id}>
+                      <td className="max-w-[18rem] px-3 py-3">
+                        <p className="truncate font-800 text-slate-950">{row.product_name}</p>
+                        <p className="mt-0.5 truncate text-[11px] font-800 uppercase text-slate-500">
+                          {row.sku} {row.supplier_name ? `- ${row.supplier_name}` : ''}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 font-700 text-slate-700">{row.warehouse_name}</td>
+                      <td className="px-3 py-3 text-right font-800 text-slate-950">{num(row.available_quantity)}</td>
+                      <td className="px-3 py-3 text-right font-700 text-slate-700">{num(row.reserved_quantity)}</td>
+                      <td className="px-3 py-3 text-right font-700 text-slate-700">{num(row.quantity)}</td>
+                      <td className="px-3 py-3 text-right font-700 text-slate-700">{coverageLabel(row)}</td>
+                      <td className="px-3 py-3 text-right font-800 text-brand-700">{num(row.recommended_qty)}</td>
+                      <td className="px-3 py-3">
+                        <StockUrgencyBadge urgency={row.urgency} />
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <button
+                          className="min-h-8 rounded-md border border-slate-300 px-2.5 text-[11px] font-800 text-slate-700 transition hover:bg-slate-50"
+                          type="button"
+                          onClick={() => openCycleCount(row)}
+                        >
+                          Contar
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {countingItem && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/40 p-4">
+          <form
+            aria-labelledby="cycle-count-title"
+            className="w-full max-w-lg rounded-lg bg-white p-5 shadow-2xl"
+            role="dialog"
+            onSubmit={(event) => void submitCycleCount(event)}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-800 uppercase text-brand-700">{countingItem.sku}</p>
+                <h2 id="cycle-count-title" className="mt-1 truncate text-lg font-800 text-slate-950">
+                  Conteo fisico
+                </h2>
+                <p className="mt-1 text-sm leading-5 text-slate-600">{countingItem.product_name}</p>
               </div>
-              {item.is_low && <span className="rounded-md bg-red-50 px-3 py-1 text-xs font-800 text-red-700">Bajo stock</span>}
+              <button
+                aria-label="Cerrar conteo fisico"
+                className="grid h-9 w-9 place-items-center rounded-md border border-slate-300 text-slate-600"
+                type="button"
+                onClick={() => setCountingItem(null)}
+              >
+                <Icon name="close" className="h-4 w-4" />
+              </button>
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-              <Metric label="Existencia" value={item.quantity} />
-              <Metric label="Reservado" value={item.reserved_quantity} />
-              <Metric label="Disponible" value={item.available_quantity} />
+
+            <div className="mt-4 grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-3">
+              <StockTinyMetric label="Sistema" value={num(countingItem.quantity)} />
+              <StockTinyMetric label="Reservado" value={num(countingItem.reserved_quantity)} />
+              <StockTinyMetric label="Disponible" value={num(countingItem.available_quantity)} />
             </div>
-          </article>
-        ))}
-      </div>
+
+            <div className="mt-4 grid gap-3">
+              <label className="grid gap-1 text-sm font-800 text-slate-700">
+                Cantidad fisica
+                <input
+                  autoFocus
+                  className="min-h-11 rounded-md border border-slate-300 px-3 text-slate-950"
+                  min="0"
+                  required
+                  step="0.001"
+                  type="number"
+                  value={countedQuantity}
+                  onChange={(event) => setCountedQuantity(event.target.value)}
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-800 text-slate-700">
+                Motivo
+                <textarea
+                  className="min-h-24 rounded-md border border-slate-300 px-3 py-2 text-slate-950"
+                  placeholder="Diferencia por conteo, rotura, vencimiento u otro motivo"
+                  value={countNote}
+                  onChange={(event) => setCountNote(event.target.value)}
+                />
+              </label>
+              <p className="rounded-md bg-slate-100 px-3 py-2 text-[13px] font-800 text-slate-700">
+                Diferencia: {signedNum(asNumber(countedQuantity) - asNumber(countingItem.quantity))}
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                className="min-h-10 rounded-md border border-slate-300 px-4 text-sm font-800 text-slate-700"
+                type="button"
+                onClick={() => setCountingItem(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="min-h-10 rounded-md bg-brand-600 px-4 text-sm font-800 text-white transition hover:bg-brand-700 disabled:opacity-60"
+                disabled={savingCount}
+                type="submit"
+              >
+                {savingCount ? 'Guardando...' : 'Guardar ajuste'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   )
+}
+
+const stockUrgencyOptions: StockUrgency[] = ['out_of_stock', 'critical', 'warning', 'low', 'ok']
+
+const stockUrgencyLabels: Record<StockUrgency, string> = {
+  out_of_stock: 'Sin stock',
+  critical: 'Critico',
+  warning: 'Cobertura corta',
+  low: 'Bajo objetivo',
+  ok: 'Normal',
+}
+
+const stockUrgencyClasses: Record<StockUrgency, string> = {
+  out_of_stock: 'bg-red-50 text-red-700 ring-red-500/20',
+  critical: 'bg-rose-50 text-rose-700 ring-rose-500/20',
+  warning: 'bg-amber-50 text-amber-800 ring-amber-500/20',
+  low: 'bg-brand-50 text-brand-700 ring-brand-500/20',
+  ok: 'bg-mint-50 text-mint-700 ring-mint-500/20',
+}
+
+function StockKpi({
+  label,
+  value,
+  hint,
+  tone = 'neutral',
+}: {
+  label: string
+  value: string
+  hint: string
+  tone?: 'neutral' | 'warning' | 'danger'
+}) {
+  const toneClass =
+    tone === 'danger'
+      ? 'border-red-200 bg-red-50'
+      : tone === 'warning'
+        ? 'border-amber-200 bg-amber-50'
+        : 'border-slate-200 bg-white'
+  return (
+    <article className={`rounded-lg border p-3 shadow-soft ${toneClass}`}>
+      <p className="truncate text-[11px] font-800 uppercase text-slate-500">{label}</p>
+      <strong className="mt-1 block text-lg font-800 text-slate-950">{value}</strong>
+      <p className="mt-1 truncate text-[12px] font-700 text-slate-600">{hint}</p>
+    </article>
+  )
+}
+
+function StockSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  children: ReactNode
+}) {
+  return (
+    <label className="grid gap-1 text-[12px] font-800 text-slate-600">
+      {label}
+      <select
+        className="min-h-10 rounded-md border border-slate-300 px-2 text-[13px] font-700 text-slate-950"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {children}
+      </select>
+    </label>
+  )
+}
+
+function StockUrgencyBadge({ urgency }: { urgency: StockUrgency }) {
+  return (
+    <span className={`inline-flex min-h-7 items-center rounded-md px-2.5 text-[11px] font-800 ring-1 ${stockUrgencyClasses[urgency]}`}>
+      {stockUrgencyLabels[urgency]}
+    </span>
+  )
+}
+
+function StockTinyMetric({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string
+  value: string
+  strong?: boolean
+}) {
+  return (
+    <div className="min-w-0 rounded-md bg-slate-50 px-2 py-2">
+      <p className="truncate text-[10px] font-800 uppercase text-slate-500">{label}</p>
+      <p className={`mt-1 truncate text-[12px] ${strong ? 'font-800 text-brand-700' : 'font-700 text-slate-800'}`}>{value}</p>
+    </div>
+  )
+}
+
+function coverageLabel(row: StockSummaryRow) {
+  if (row.coverage_days === null) return 'Sin ventas'
+  return `${num(row.coverage_days)} dias`
+}
+
+function signedNum(value: unknown) {
+  const parsed = asNumber(value)
+  return `${parsed > 0 ? '+' : ''}${num(parsed)}`
 }
 
 export function DashboardOrdersPage() {

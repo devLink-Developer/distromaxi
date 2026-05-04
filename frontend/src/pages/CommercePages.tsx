@@ -96,6 +96,7 @@ export function DistributorCatalogPage() {
   const [query, setQuery] = useState('')
   const add = useCartStore((state) => state.add)
   const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     if (!id) return
@@ -111,6 +112,10 @@ export function DistributorCatalogPage() {
   )
 
   function addProduct(product: Product) {
+    if (productAvailable(product) <= 0) {
+      showError('Este producto no tiene stock disponible para venta.')
+      return
+    }
     const result = add(product)
     showSuccess(result === 'replaced' ? `Empezaste un pedido con ${product.distributor_name}.` : `${product.name} se sumo al pedido.`)
   }
@@ -158,12 +163,17 @@ export function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const add = useCartStore((state) => state.add)
   const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
 
   useEffect(() => {
     if (id) void api.product(id).then(setProduct)
   }, [id])
 
   function addProduct(nextProduct: Product) {
+    if (productAvailable(nextProduct) <= 0) {
+      showError('Este producto no tiene stock disponible para venta.')
+      return
+    }
     const result = add(nextProduct)
     showSuccess(result === 'replaced' ? `Empezaste un pedido con ${nextProduct.distributor_name}.` : `${nextProduct.name} se sumo al pedido.`)
   }
@@ -200,8 +210,13 @@ export function ProductDetailPage() {
         </dl>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <p className="text-3xl font-800 text-slate-950">${Number(product.price).toLocaleString('es-AR')}</p>
-          <button className="min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white" type="button" onClick={() => addProduct(product)}>
-            Sumar al pedido
+          <button
+            className="min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white disabled:bg-slate-300 disabled:text-slate-600"
+            disabled={productAvailable(product) <= 0}
+            type="button"
+            onClick={() => addProduct(product)}
+          >
+            {productAvailable(product) <= 0 ? 'Sin stock' : 'Sumar al pedido'}
           </button>
         </div>
       </div>
@@ -246,10 +261,11 @@ export function CartPage() {
             </div>
             <input
               className="min-h-11 w-28 rounded-md border border-slate-300 px-3"
+              max={Math.max(1, productAvailable(item.product))}
               min={1}
               type="number"
               value={item.quantity}
-              onChange={(event) => setQuantity(item.product.id, Number(event.target.value))}
+              onChange={(event) => setQuantity(item.product.id, Math.min(Number(event.target.value), productAvailable(item.product)))}
             />
             <button className="min-h-11 rounded-md border border-red-200 px-3 font-800 text-red-700" type="button" onClick={() => remove(item.product.id)}>
               Quitar
@@ -494,6 +510,7 @@ export function OrdersPage() {
 }
 
 function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Product) => void }) {
+  const available = productAvailable(product)
   return (
     <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
       <img
@@ -511,7 +528,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Pr
           <div>
             <p className="text-xs font-700 text-slate-500">Disponible</p>
             <p className="text-sm font-800 text-slate-950">
-              {Number(product.stock_available).toLocaleString('es-AR')} {product.unit}
+              {available.toLocaleString('es-AR')} {product.unit}
             </p>
           </div>
           <p className="text-xl font-800 text-slate-950">${Number(product.price).toLocaleString('es-AR')}</p>
@@ -524,16 +541,22 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Pr
             Ver detalle
           </Link>
           <button
-            className="min-h-11 rounded-md bg-brand-600 px-3 text-sm font-800 text-white"
+            className="min-h-11 rounded-md bg-brand-600 px-3 text-sm font-800 text-white disabled:bg-slate-300 disabled:text-slate-600"
+            disabled={available <= 0}
             type="button"
             onClick={() => onAdd(product)}
           >
-            Agregar
+            {available <= 0 ? 'Sin stock' : 'Agregar'}
           </button>
         </div>
       </div>
     </article>
   )
+}
+
+function productAvailable(product: Product) {
+  const parsed = Number(product.stock_available ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function OrderSummary() {

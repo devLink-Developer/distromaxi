@@ -2,6 +2,7 @@ import type {
   AuthResponse,
   Commerce,
   CurrentRoute,
+  CycleCountResponse,
   Delivery,
   Distributor,
   DistributorDeliverySlot,
@@ -23,6 +24,8 @@ import type {
   ProductSupplier,
   RoutePlan,
   RouteStop,
+  StockSummary,
+  StockSummaryRow,
   StockItem,
   User,
   Vehicle,
@@ -131,6 +134,18 @@ export const api = {
   productSubCategories: () => apiFetch<ProductSubCategory[]>('/product-subcategories/'),
   commerces: () => apiFetch<Commerce[]>('/commerces/'),
   stock: () => apiFetch<StockItem[]>('/stock/'),
+  stockSummary: (days = 30) => apiFetch<StockSummary>(`/stock/summary/?days=${days}`),
+  stockReplenishment: (days = 30) => apiFetch<StockSummaryRow[]>(`/stock/replenishment/?days=${days}`),
+  cycleCountStock: (id: number, body: { counted_quantity: string | number; note?: string }) =>
+    apiFetch<CycleCountResponse>(`/stock/${id}/cycle-count/`, { method: 'POST', body }),
+  stockMovements: (filters: { product?: number; warehouse?: number; movement_type?: string } = {}) => {
+    const query = new URLSearchParams()
+    if (filters.product) query.set('product', String(filters.product))
+    if (filters.warehouse) query.set('warehouse', String(filters.warehouse))
+    if (filters.movement_type) query.set('movement_type', filters.movement_type)
+    const suffix = query.toString()
+    return apiFetch(`/stock-movements/${suffix ? `?${suffix}` : ''}`)
+  },
   vehicles: () => apiFetch<Vehicle[]>('/vehicles/'),
   drivers: () => apiFetch<DriverProfile[]>('/drivers/'),
   orders: () => apiFetch<Order[]>('/orders/'),

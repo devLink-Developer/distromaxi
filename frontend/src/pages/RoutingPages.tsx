@@ -8,6 +8,7 @@ import { api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useFeedbackStore } from '../stores/feedbackStore'
 import type {
+  Commerce,
   DistributorDeliverySlot,
   DriverProfile,
   GeoJsonLine,
@@ -42,14 +43,22 @@ type OrderScheduleDraft = {
   delivery_slot_id: number
 }
 
+type RouteFilterSummary = {
+  orders: number
+  kg: number
+  m3: number
+}
+
 export function DashboardOrdersRoutingPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [commerces, setCommerces] = useState<Commerce[]>([])
   const [deliverySlots, setDeliverySlots] = useState<DistributorDeliverySlot[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [dateFilter, setDateFilter] = useState('')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeOrderId, setActiveOrderId] = useState<number | null>(null)
+  const [selectedCustomerOrder, setSelectedCustomerOrder] = useState<Order | null>(null)
   const [drafts, setDrafts] = useState<Record<number, OrderScheduleDraft>>({})
   const [savingOrderId, setSavingOrderId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -60,6 +69,7 @@ export function DashboardOrdersRoutingPage() {
     () => deliverySlots.filter((slot) => slot.active).sort((left, right) => left.sort_order - right.sort_order || left.start_time.localeCompare(right.start_time)),
     [deliverySlots],
   )
+  const commerceById = useMemo(() => new Map(commerces.map((commerce) => [commerce.id, commerce])), [commerces])
   const visibleOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase()
     return orders.filter((order) => {
@@ -86,10 +96,11 @@ export function DashboardOrdersRoutingPage() {
     async function load() {
       setLoading(true)
       try {
-        const [loadedOrders, loadedSlots] = await Promise.all([api.orders(), api.deliverySlots()])
+        const [loadedOrders, loadedSlots, loadedCommerces] = await Promise.all([api.orders(), api.deliverySlots(), api.commerces()])
         if (disposed) return
         setOrders(loadedOrders)
         setDeliverySlots(loadedSlots)
+        setCommerces(loadedCommerces)
       } catch (caught) {
         if (!disposed) showError(caught instanceof Error ? caught.message : 'No se pudieron cargar los pedidos.')
       } finally {
@@ -101,6 +112,20 @@ export function DashboardOrdersRoutingPage() {
       disposed = true
     }
   }, [showError])
+
+  useEffect(() => {
+    if (!selectedCustomerOrder) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setSelectedCustomerOrder(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [selectedCustomerOrder])
 
   function openSchedule(order: Order) {
     const fallbackSlotId = order.delivery_slot ?? activeSlots[0]?.id ?? 0
@@ -278,7 +303,14 @@ export function DashboardOrdersRoutingPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="font-800 text-slate-950">#{order.id}</p>
-                          <p className="mt-1 line-clamp-2 text-slate-600">{order.commerce_name}</p>
+                          <button
+                            className="mt-1 line-clamp-2 text-left font-700 text-slate-700 underline decoration-slate-300 underline-offset-4 transition hover:text-brand-700 hover:decoration-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                            type="button"
+                            onClick={() => setSelectedCustomerOrder(order)}
+                            aria-label={`Ver datos del cliente ${order.commerce_name}`}
+                          >
+                            {order.commerce_name}
+                          </button>
                         </div>
                         <StatusBadge status={order.status} />
                       </div>
@@ -319,7 +351,14 @@ export function DashboardOrdersRoutingPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-800 text-slate-950">Pedido #{order.id}</h2>
-                    <p className="mt-1 text-sm text-slate-600">{order.commerce_name}</p>
+                    <button
+                      className="mt-1 text-left text-sm font-700 text-slate-700 underline decoration-slate-300 underline-offset-4 transition hover:text-brand-700 hover:decoration-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                      type="button"
+                      onClick={() => setSelectedCustomerOrder(order)}
+                      aria-label={`Ver datos del cliente ${order.commerce_name}`}
+                    >
+                      {order.commerce_name}
+                    </button>
                   </div>
                   <StatusBadge status={order.status} />
                 </div>
@@ -349,6 +388,13 @@ export function DashboardOrdersRoutingPage() {
           </section>
         </>
       )}
+      {selectedCustomerOrder ? (
+        <CustomerSummaryModal
+          order={selectedCustomerOrder}
+          customer={commerceById.get(selectedCustomerOrder.commerce) ?? null}
+          onClose={() => setSelectedCustomerOrder(null)}
+        />
+      ) : null}
     </section>
   )
 }
@@ -358,6 +404,99 @@ function OrderMetric({ label, value }: { label: string; value: number }) {
     <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-right">
       <p className="text-[11px] font-800 uppercase text-slate-500">{label}</p>
       <p className="text-lg font-800 text-slate-950">{value}</p>
+    </div>
+  )
+}
+
+function CustomerSummaryModal({ order, customer, onClose }: { order: Order; customer: Commerce | null; onClose: () => void }) {
+  const title = customer?.trade_name || order.commerce_name
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    closeButtonRef.current?.focus()
+  }, [])
+
+  return (
+    <div
+      className="fixed inset-0 z-[1300] grid place-items-end bg-slate-950/50 p-0 sm:place-items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="customer-summary-title"
+      onClick={onClose}
+    >
+      <section
+        className="max-h-dvh w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white p-4 shadow-[0_36px_80px_-32px_rgba(15,23,42,0.45)] sm:max-h-[92dvh] sm:max-w-2xl sm:rounded-lg sm:p-5"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+          <div className="min-w-0">
+            <p className="text-xs font-800 uppercase text-slate-500">Cliente</p>
+            <h2 id="customer-summary-title" className="mt-1 break-words text-xl font-800 text-slate-950">
+              {title}
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Resumen asociado al pedido #{order.id}</p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-slate-300 px-3 text-sm font-800 text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar datos del cliente"
+          >
+            X
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4">
+          <section className="rounded-lg border border-slate-200 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h3 className="font-800 text-slate-950">Datos comerciales</h3>
+              {customer ? (
+                <span className={`rounded-md px-2 py-1 text-xs font-800 ${customer.active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                  {customer.active ? 'Activo' : 'Inactivo'}
+                </span>
+              ) : null}
+            </div>
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+              <CustomerInfoRow label="Nombre comercial" value={title} />
+              <CustomerInfoRow label="Razon social" value={customer?.legal_name} />
+              <CustomerInfoRow label="CUIT" value={customer?.tax_id} />
+              <CustomerInfoRow label="Distribuidora" value={order.distributor_name} />
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 p-3">
+            <h3 className="font-800 text-slate-950">Contacto</h3>
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+              <CustomerInfoRow label="Contacto" value={customer?.contact_name} />
+              <CustomerInfoRow label="Email" value={customer?.email} />
+              <CustomerInfoRow label="Telefono" value={customer?.phone} />
+              <CustomerInfoRow label="Notas de entrega" value={customer?.delivery_notes} />
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 p-3">
+            <h3 className="font-800 text-slate-950">Entrega</h3>
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+              <CustomerInfoRow label="Direccion cliente" value={formatCustomerAddress(customer, order)} />
+              <CustomerInfoRow label="Codigo postal" value={customer?.postal_code} />
+              <CustomerInfoRow label="Coordenadas" value={customerCoordinates(customer, order)} />
+              <CustomerInfoRow label="Ventana habitual" value={windowRangeLabel(customer?.default_window_start, customer?.default_window_end)} />
+              <CustomerInfoRow label="Entrega del pedido" value={`${formatOrderDate(order.dispatch_date)} - ${deliverySlotSummary(order)}`} />
+              <CustomerInfoRow label="Estado pedido" value={statusLabel(order.status)} />
+            </dl>
+          </section>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function CustomerInfoRow({ label, value }: { label: string; value: string | number | null | undefined }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="text-[11px] font-800 uppercase text-slate-500">{label}</dt>
+      <dd className="break-words text-sm font-700 leading-6 text-slate-900">{displayValue(value)}</dd>
     </div>
   )
 }
@@ -488,6 +627,7 @@ export function DashboardRoutingPage() {
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null)
   const [draftRuns, setDraftRuns] = useState<RouteRun[]>([])
   const [removedStopIds, setRemovedStopIds] = useState<number[]>([])
+  const routeLoadRequestIdRef = useRef(0)
   const user = useAuthStore((state) => state.user)
   const showSuccess = useFeedbackStore((state) => state.success)
   const showError = useFeedbackStore((state) => state.error)
@@ -511,6 +651,7 @@ export function DashboardRoutingPage() {
   const selectedVehicles = useMemo(() => vehicles.filter((vehicle) => selectedVehicleIds.includes(vehicle.id)), [vehicles, selectedVehicleIds])
   const selectedCapacity = useMemo(() => selectedVehicles.reduce(sumVehicleCapacity, { kg: 0, m3: 0 }), [selectedVehicles])
   const pendingOrderById = useMemo(() => new Map(pendingOrders.map((order) => [order.id, order])), [pendingOrders])
+  const filteredOrderSummary = useMemo(() => buildRouteFilterSummary(pendingOrders, routePlans), [pendingOrders, routePlans])
   const manualOrderCount = useMemo(() => Object.values(manualRuns).reduce((total, orderIds) => total + orderIds.length, 0), [manualRuns])
   const manualCapacityWarning = useMemo(
     () => selectedVehicles.some((vehicle) => manualRunMetrics(vehicle, manualRuns[String(vehicle.id)] ?? [], pendingOrderById).overCapacity),
@@ -527,25 +668,35 @@ export function DashboardRoutingPage() {
     !manualCapacityWarning &&
     selectedVehicleIds.some((id) => selectableVehicleIdSet.has(id))
 
+  function resetRouteWorkspace() {
+    setRoutePlans([])
+    setPendingOrders([])
+    setSelectedOrderIds([])
+    setManualRuns({})
+    setEditingPlanId(null)
+    setDraftRuns([])
+    setRemovedStopIds([])
+  }
+
   async function load(date = dispatchDate, deliverySlotId = selectedDeliverySlotId) {
+    const requestId = routeLoadRequestIdRef.current + 1
+    routeLoadRequestIdRef.current = requestId
+    resetRouteWorkspace()
     if (!deliverySlotId) {
       setLoading(false)
-      setRoutePlans([])
-      setPendingOrders([])
-      setSelectedOrderIds([])
-      setManualRuns({})
       return
     }
     setLoading(true)
     try {
       const [plans, pending] = await Promise.all([api.routePlans(date, deliverySlotId), api.pendingRouteOrders(date, deliverySlotId)])
+      if (requestId !== routeLoadRequestIdRef.current) return
       setRoutePlans(plans)
       setPendingOrders(pending)
       setSelectedOrderIds(automaticRoutingEnabled ? pending.filter((order) => order.routable).map((order) => order.id) : [])
     } catch (caught) {
-      showError(caught instanceof Error ? caught.message : 'No se pudieron cargar las rutas.')
+      if (requestId === routeLoadRequestIdRef.current) showError(caught instanceof Error ? caught.message : 'No se pudieron cargar las rutas.')
     } finally {
-      setLoading(false)
+      if (requestId === routeLoadRequestIdRef.current) setLoading(false)
     }
   }
 
@@ -795,6 +946,7 @@ export function DashboardRoutingPage() {
       showError('Selecciona una franja horaria antes de generar rutas.')
       return
     }
+    const deliverySlotId = selectedDeliverySlotId
     const vehicleIds = selectedVehicleIds.filter((id) => selectableVehicleIdSet.has(id))
     if (vehicleIds.length === 0) {
       showError('Selecciona al menos un vehiculo activo con capacidad cargada.')
@@ -802,19 +954,16 @@ export function DashboardRoutingPage() {
     }
     setGenerating(true)
     try {
-      const payload: Record<string, unknown> = { dispatch_date: dispatchDate, delivery_slot_id: selectedDeliverySlotId }
+      const payload: Record<string, unknown> = { dispatch_date: dispatchDate, delivery_slot_id: deliverySlotId }
       if (selectedOrderIds.length > 0) payload.order_ids = selectedOrderIds
       payload.vehicle_ids = vehicleIds
       const vehicleDriverIds = Object.fromEntries(Object.entries(selectedDriverByVehicleId).filter(([vehicleId]) => vehicleIds.includes(Number(vehicleId))))
       if (Object.keys(vehicleDriverIds).length > 0) payload.vehicle_driver_ids = vehicleDriverIds
-      const draft = await api.generateRoutePlan(payload, `route-preview-${dispatchDate}-${selectedDeliverySlotId}-${Date.now()}`)
-      setRoutePlans((current) => [draft, ...current.filter((item) => item.id !== draft.id && item.status !== 'DRAFT')])
-      setPendingOrders([])
-      setSelectedOrderIds([])
+      await api.generateRoutePlan(payload, `route-preview-${dispatchDate}-${deliverySlotId}-${Date.now()}`)
       setSelectedVehicleIds([])
       setSelectedDriverByVehicleId({})
-      setManualRuns({})
       showSuccess('Rutas generadas.')
+      await load(dispatchDate, deliverySlotId)
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo generar el borrador.')
     } finally {
@@ -827,6 +976,7 @@ export function DashboardRoutingPage() {
       showError('Selecciona una franja horaria antes de crear la ruta manual.')
       return
     }
+    const deliverySlotId = selectedDeliverySlotId
     const vehicleIds = selectedVehicleIds.filter((id) => selectableVehicleIdSet.has(id))
     const runs = vehicleIds.map((vehicleId) => ({
       vehicle_id: vehicleId,
@@ -844,14 +994,11 @@ export function DashboardRoutingPage() {
     }
     setGenerating(true)
     try {
-      const draft = await api.createManualRoutePlan({ dispatch_date: dispatchDate, delivery_slot_id: selectedDeliverySlotId, runs })
-      setRoutePlans((current) => [draft, ...current.filter((item) => item.id !== draft.id && item.status !== 'DRAFT')])
-      setPendingOrders((current) => current.filter((order) => !assignedOrderIds.has(order.id)))
-      setSelectedOrderIds((current) => current.filter((orderId) => !assignedOrderIds.has(orderId)))
+      await api.createManualRoutePlan({ dispatch_date: dispatchDate, delivery_slot_id: deliverySlotId, runs })
       setSelectedVehicleIds([])
       setSelectedDriverByVehicleId({})
-      setManualRuns({})
       showSuccess('Ruta manual creada.')
+      await load(dispatchDate, deliverySlotId)
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo crear la ruta manual.')
     } finally {
@@ -873,15 +1020,11 @@ export function DashboardRoutingPage() {
     })
     if (!confirmed) return
     try {
-      const updated =
-        action === 'confirm'
-          ? await api.confirmRoutePlan(planId, { reviewed: true })
-          : action === 'dispatch'
-            ? await api.dispatchRoutePlan(planId)
-            : await api.replanRoutePlan(planId)
-      setRoutePlans((current) => [updated, ...current.filter((item) => item.id !== planId && item.id !== updated.id)])
+      if (action === 'confirm') await api.confirmRoutePlan(planId, { reviewed: true })
+      else if (action === 'dispatch') await api.dispatchRoutePlan(planId)
+      else await api.replanRoutePlan(planId)
       showSuccess(action === 'confirm' ? 'Borrador confirmado.' : action === 'dispatch' ? 'Ruta despachada.' : 'Se genero una nueva propuesta.')
-      if (editingPlanId === planId) cancelEditing()
+      await load(dispatchDate, selectedDeliverySlotId)
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo completar la accion.')
     }
@@ -889,7 +1032,7 @@ export function DashboardRoutingPage() {
 
   async function saveEdit(planId: number) {
     try {
-      const updated = await api.patchRouteStops(planId, {
+      await api.patchRouteStops(planId, {
         stops: draftRuns.flatMap((run) =>
           run.stops.map((stop) => ({
             ...(stop.id > 0 ? { id: stop.id } : { order_id: stop.order }),
@@ -901,11 +1044,8 @@ export function DashboardRoutingPage() {
         ),
         remove_stop_ids: removedStopIds,
       })
-      const addedOrderIds = new Set(draftRuns.flatMap((run) => run.stops.filter((stop) => stop.id < 0).map((stop) => stop.order)))
-      setRoutePlans((current) => current.map((item) => (item.id === updated.id ? updated : item)))
-      setPendingOrders((current) => current.filter((order) => !addedOrderIds.has(order.id)))
       showSuccess('Ruta editada y recalculada.')
-      cancelEditing()
+      await load(dispatchDate, selectedDeliverySlotId)
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo guardar la edicion.')
     }
@@ -922,9 +1062,8 @@ export function DashboardRoutingPage() {
     if (!confirmed) return
     try {
       await api.deleteRoutePlan(planId)
-      setRoutePlans((current) => current.filter((item) => item.id !== planId))
-      if (editingPlanId === planId) cancelEditing()
       showSuccess('Ruta eliminada.')
+      await load(dispatchDate, selectedDeliverySlotId)
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo eliminar la ruta.')
     }
@@ -982,6 +1121,7 @@ export function DashboardRoutingPage() {
           <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-800 text-slate-600">
             Capacidad seleccionada: {formatCapacityAmount(selectedCapacity.kg, 'kg')} - {formatCapacityAmount(selectedCapacity.m3, 'm3')}
           </div>
+          <RouteFilterTotals summary={filteredOrderSummary} />
           {manualRoutingEnabled ? (
             <button className="min-h-11 rounded-md bg-slate-950 px-4 font-800 text-white disabled:opacity-60" type="button" disabled={!canCreateManual} onClick={() => void createManualRoute()}>
               {generating ? 'Creando...' : 'Crear ruta manual'}
@@ -1582,6 +1722,17 @@ function ManualRouteBoard({
   )
 }
 
+function RouteFilterTotals({ summary }: { summary: RouteFilterSummary }) {
+  return (
+    <div className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-800 text-brand-800" aria-label="Resumen de pedidos filtrados">
+      <p>Pedidos filtrados: {summary.orders}</p>
+      <p className="mt-0.5">
+        Carga filtrada: {formatCapacityAmount(summary.kg, 'kg')} - {formatCapacityAmount(summary.m3, 'm3')}
+      </p>
+    </div>
+  )
+}
+
 function RouteSummary({ plan }: { plan: RoutePlan }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
@@ -1757,6 +1908,40 @@ function formatVehicleCapacity(vehicle: Vehicle) {
   return `${formatCapacityAmount(Number(vehicle.capacity_kg ?? 0), 'kg')} - ${formatCapacityAmount(Number(vehicle.capacity_m3 ?? 0), 'm3')}`
 }
 
+function buildRouteFilterSummary(pendingOrders: PendingRouteOrder[], routePlans: RoutePlan[]): RouteFilterSummary {
+  const loadsByOrderId = new Map<number, { kg: number; m3: number }>()
+  pendingOrders.forEach((order) => {
+    loadsByOrderId.set(order.id, {
+      kg: capacityNumber(order.planned_weight_kg),
+      m3: capacityNumber(order.planned_volume_m3),
+    })
+  })
+  routePlans.forEach((plan) => {
+    plan.runs.forEach((run) => {
+      run.stops.forEach((stop) => {
+        if (loadsByOrderId.has(stop.order)) return
+        loadsByOrderId.set(stop.order, {
+          kg: capacityNumber(stop.demand_kg),
+          m3: capacityNumber(stop.demand_m3),
+        })
+      })
+    })
+  })
+  return Array.from(loadsByOrderId.values()).reduce<RouteFilterSummary>(
+    (summary, load) => ({
+      orders: summary.orders + 1,
+      kg: summary.kg + load.kg,
+      m3: summary.m3 + load.m3,
+    }),
+    { orders: 0, kg: 0, m3: 0 },
+  )
+}
+
+function capacityNumber(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0)
+  return Number.isFinite(amount) ? amount : 0
+}
+
 function formatCapacityAmount(value: number, unit: 'kg' | 'm3') {
   if (!Number.isFinite(value) || value <= 0) return `sin ${unit}`
   return `${value.toLocaleString('es-AR', { maximumFractionDigits: unit === 'kg' ? 0 : 2 })} ${unit}`
@@ -1916,6 +2101,23 @@ function statusLabel(status: string) {
     CANCELLED: 'Cancelado',
   }
   return labels[status] ?? status
+}
+
+function displayValue(value: string | number | null | undefined) {
+  const text = String(value ?? '').trim()
+  return text || '-'
+}
+
+function formatCustomerAddress(customer: Commerce | null, order: Order) {
+  if (!customer) return order.delivery_address
+  return [customer.address, customer.city, customer.province].filter(Boolean).join(', ') || order.delivery_address
+}
+
+function customerCoordinates(customer: Commerce | null, order: Order) {
+  const latitude = customer?.latitude ?? order.delivery_latitude
+  const longitude = customer?.longitude ?? order.delivery_longitude
+  if (!latitude || !longitude) return ''
+  return `${latitude}, ${longitude}`
 }
 
 function formatMoney(value: string | number | null | undefined) {
