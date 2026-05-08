@@ -20,8 +20,8 @@ services:
     environment:
       DJANGO_DEBUG: "${DJANGO_DEBUG:-1}"
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-change-me-in-production}"
-      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,testserver}"
-      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,testserver,distromaxi.com,www.distromaxi.com,distromaxi.com.ar,www.distromaxi.com.ar}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://distromaxi.com,https://www.distromaxi.com,https://distromaxi.com.ar,https://www.distromaxi.com.ar}"
       POSTGRES_HOST: "${POSTGRES_HOST:-db}"
       POSTGRES_PORT: "${POSTGRES_PORT:-5432}"
       POSTGRES_DB: "${POSTGRES_DB:-distromax}"
@@ -42,8 +42,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=secureapprove_proxy"
+      - "traefik.http.routers.distromaxi-api.entrypoints=websecure"
+      - "traefik.http.routers.distromaxi-api.rule=(Host(`distromaxi.com`) || Host(`www.distromaxi.com`) || Host(`distromaxi.com.ar`) || Host(`www.distromaxi.com.ar`)) && PathPrefix(`/api`)"
+      - "traefik.http.routers.distromaxi-api.priority=100"
+      - "traefik.http.routers.distromaxi-api.tls=true"
+      - "traefik.http.routers.distromaxi-api.middlewares=default-sec-headers@file,gzip-compress@file,cors-headers@file"
+      - "traefik.http.services.distromaxi-api.loadbalancer.server.port=8000"
+    networks:
+      - default
+      - secureapprove_proxy
 
   frontend:
     build:
@@ -53,8 +65,23 @@ services:
         VITE_API_URL: "${VITE_API_URL:-/api}"
     depends_on:
       - backend
-    ports:
-      - "5173:80"
+    expose:
+      - "80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=secureapprove_proxy"
+      - "traefik.http.routers.distromaxi-web.entrypoints=websecure"
+      - "traefik.http.routers.distromaxi-web.rule=Host(`distromaxi.com`) || Host(`www.distromaxi.com`) || Host(`distromaxi.com.ar`) || Host(`www.distromaxi.com.ar`)"
+      - "traefik.http.routers.distromaxi-web.tls=true"
+      - "traefik.http.routers.distromaxi-web.middlewares=default-sec-headers@file,gzip-compress@file"
+      - "traefik.http.services.distromaxi-web.loadbalancer.server.port=80"
+    networks:
+      - default
+      - secureapprove_proxy
 
 volumes:
   postgres_data:
+
+networks:
+  secureapprove_proxy:
+    external: true
