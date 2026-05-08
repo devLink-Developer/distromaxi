@@ -679,7 +679,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Hace tus pedidos desde un solo lugar.')).toBeInTheDocument()
+    expect(screen.getByText('Compra mayorista simple para tu negocio.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /quiero vender con distromaxi/i })).toHaveAttribute('href', '/planes')
   })
 
