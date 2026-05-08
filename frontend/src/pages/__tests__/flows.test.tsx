@@ -697,6 +697,7 @@ describe('DistroMaxi frontend flows', () => {
     )
 
     expect(await screen.findByText('Agua mineral 1.5L x 6')).toBeInTheDocument()
+    expect(screen.getByText('$541,67 por unidad')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/products/?distributor=1'), expect.any(Object))
   })
 
@@ -709,7 +710,8 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('$6.500')).toBeInTheDocument()
+    expect(screen.getAllByText('$6.500').length).toBeGreaterThan(0)
+    expect(screen.getByText('$541,67 por unidad')).toBeInTheDocument()
   })
 
   it('keeps cart items from one distributor only', () => {

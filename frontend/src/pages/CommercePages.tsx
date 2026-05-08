@@ -196,20 +196,32 @@ export function ProductDetailPage() {
         <p className="mt-2 text-sm font-700 text-slate-500">{[product.distributor_name, product.supplier_name].filter(Boolean).join(' · ')}</p>
         {product.description && <p className="mt-3 leading-7 text-slate-600">{product.description}</p>}
         {product.characteristics && <p className="mt-3 leading-7 text-slate-600">{product.characteristics}</p>}
+        <div className="mt-5 grid gap-3 rounded-lg border border-brand-100 bg-brand-50 p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <p className="text-xs font-800 uppercase text-brand-700">Precio por {product.unit || 'bulto'}</p>
+            <p className="mt-1 text-3xl font-800 text-slate-950">{formatMoney(product.price)}</p>
+            <p className="mt-1 text-base font-800 text-emerald-700">{unitPriceLabel(product)}</p>
+          </div>
+          <div className="rounded-md bg-white px-3 py-2 text-sm font-800 text-slate-700 shadow-soft">
+            {packageLabel(product)}
+          </div>
+        </div>
         <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
           <Info label="Codigo" value={product.sku} />
           <Info label="Marca" value={product.brand || 'Sin marca'} />
           <Info label="Subcategoria" value={product.subcategory || 'Sin subcategoria'} />
-          <Info label="Presentacion" value={product.package_size || product.unit} />
+          <Info label="Presentacion" value={packageLabel(product)} />
           <Info label="Medidas" value={`${Number(product.length).toLocaleString('es-AR')} x ${Number(product.width).toLocaleString('es-AR')} x ${Number(product.height).toLocaleString('es-AR')} ${product.dimension_unit}`} />
           <Info label="Peso" value={`${Number(product.weight).toLocaleString('es-AR')} ${product.weight_unit}`} />
-          <Info label="Unidades por bulto" value={String(product.units_per_package)} />
+          <Info label="Precio unitario" value={unitPriceLabel(product)} />
           <Info label="Pallet" value={`${product.packages_per_pallet ?? 0} bultos / ${product.units_per_pallet ?? 0} unidades`} />
           <Info label="Descuento" value={product.discount_name ? `${product.discount_name} · ${Number(product.discount_percent).toLocaleString('es-AR')}%` : `${Number(product.discount_percent).toLocaleString('es-AR')}%`} />
           <Info label="Disponible" value={`${Number(product.stock_available).toLocaleString('es-AR')} ${product.unit}`} />
         </dl>
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-3xl font-800 text-slate-950">${Number(product.price).toLocaleString('es-AR')}</p>
+          <p className="text-sm font-800 text-slate-600">
+            Disponible: {productAvailable(product).toLocaleString('es-AR')} {product.unit}
+          </p>
           <button
             className="min-h-12 rounded-md bg-brand-600 px-5 font-800 text-white disabled:bg-slate-300 disabled:text-slate-600"
             disabled={productAvailable(product) <= 0}
@@ -252,14 +264,22 @@ export function CartPage() {
       </div>
       <div className="grid gap-3">
         {items.map((item) => (
-          <article key={item.product.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft md:grid-cols-[1fr_auto_auto] md:items-center">
+          <article key={item.product.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft md:grid-cols-[1fr_8rem_auto_auto] md:items-center">
             <div>
               <h2 className="font-800 text-slate-950">{item.product.name}</h2>
-              <p className="text-sm text-slate-600">
-                ${Number(item.product.price).toLocaleString('es-AR')} por {item.product.unit}
+              <p className="mt-1 text-sm font-700 text-slate-600">
+                {packageLabel(item.product)} - {formatMoney(item.product.price)} por {item.product.unit}
+              </p>
+              <p className="mt-1 text-sm font-800 text-emerald-700">{unitPriceLabel(item.product)}</p>
+            </div>
+            <div className="text-sm md:text-right">
+              <p className="font-700 text-slate-500">Subtotal</p>
+              <p className="font-800 text-slate-950">
+                {formatMoney(productPrice(item.product) * item.quantity)}
               </p>
             </div>
             <input
+              aria-label={`Cantidad de ${item.product.name}`}
               className="min-h-11 w-28 rounded-md border border-slate-300 px-3"
               max={Math.max(1, productAvailable(item.product))}
               min={1}
@@ -275,7 +295,7 @@ export function CartPage() {
       </div>
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
         <p className="text-sm font-700 text-slate-500">Total estimado</p>
-        <p className="mt-1 text-3xl font-800 text-slate-950">${total().toLocaleString('es-AR')}</p>
+        <p className="mt-1 text-3xl font-800 text-slate-950">{formatMoney(total())}</p>
         <Link className="mt-4 inline-flex min-h-12 items-center rounded-md bg-brand-600 px-5 font-800 text-white" to="/checkout">
           Seguir con el pedido
         </Link>
@@ -512,28 +532,40 @@ export function OrdersPage() {
 function ProductCard({ product, onAdd }: { product: Product; onAdd: (product: Product) => void }) {
   const available = productAvailable(product)
   return (
-    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
+    <article className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
       <img
         className="h-40 w-full object-cover"
         src={product.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=80'}
         alt={product.name}
       />
-      <div className="grid gap-3 p-4">
+      <div className="grid flex-1 gap-4 p-4">
         <div>
           <p className="text-xs font-800 uppercase text-brand-700">{product.category}</p>
           <h2 className="mt-1 text-lg font-800 text-slate-950">{product.name}</h2>
           <p className="mt-1 text-sm text-slate-600">Codigo {product.sku}</p>
         </div>
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-700 text-slate-500">Disponible</p>
-            <p className="text-sm font-800 text-slate-950">
-              {available.toLocaleString('es-AR')} {product.unit}
-            </p>
+
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-800 uppercase text-slate-500">Presentacion</p>
+              <p className="mt-1 text-sm font-800 text-slate-950">{packageLabel(product)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-800 uppercase text-slate-500">Disponible</p>
+              <p className="mt-1 text-sm font-800 text-slate-950">
+                {available.toLocaleString('es-AR')} {product.unit}
+              </p>
+            </div>
           </div>
-          <p className="text-xl font-800 text-slate-950">${Number(product.price).toLocaleString('es-AR')}</p>
+          <div className="mt-3 border-t border-slate-200 pt-3">
+            <p className="text-xs font-800 uppercase text-slate-500">Precio por {product.unit || 'bulto'}</p>
+            <p className="text-2xl font-800 text-slate-950">{formatMoney(product.price)}</p>
+            <p className="mt-1 text-sm font-800 text-emerald-700">{unitPriceLabel(product)}</p>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+
+        <div className="mt-auto grid grid-cols-2 gap-2">
           <Link
             className="min-h-11 rounded-md border border-slate-300 px-3 py-2 text-center text-sm font-800 text-slate-700"
             to={`/products/${product.id}`}
@@ -559,6 +591,49 @@ function productAvailable(product: Product) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function productPrice(product: Product) {
+  const parsed = Number(product.price ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function unitsPerPackage(product: Product) {
+  const parsed = Number(product.units_per_package ?? 1)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+}
+
+function unitPrice(product: Product) {
+  return productPrice(product) / unitsPerPackage(product)
+}
+
+function formatMoney(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount)) return '$0'
+  const hasDecimals = Math.abs(amount % 1) > 0
+  return `$${amount.toLocaleString('es-AR', {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`
+}
+
+function packageLabel(product: Product) {
+  const unit = product.unit?.trim() || 'bulto'
+  const units = unitsPerPackage(product)
+  if (units <= 1) return capitalize(unit)
+  const saleUnit = unit.toLowerCase().startsWith('unidad') ? 'pack' : unit
+  return `${capitalize(saleUnit)} x ${units.toLocaleString('es-AR')} unidades`
+}
+
+function unitPriceLabel(product: Product) {
+  const units = unitsPerPackage(product)
+  if (units <= 1) return `${formatMoney(unitPrice(product))} por ${product.unit || 'unidad'}`
+  return `${formatMoney(unitPrice(product))} por unidad`
+}
+
+function capitalize(value: string) {
+  if (!value) return value
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`
+}
+
 function OrderSummary() {
   const items = useCartStore((state) => state.items)
   const total = useCartStore((state) => state.total)
@@ -568,17 +643,20 @@ function OrderSummary() {
       <div className="mt-4 grid gap-3">
         {items.map((item) => (
           <div key={item.product.id} className="flex justify-between gap-3 text-sm">
-            <span className="font-700 text-slate-700">
+            <span className="grid gap-1 font-700 text-slate-700">
               {item.quantity} x {item.product.name}
+              <span className="text-xs font-800 text-emerald-700">
+                {packageLabel(item.product)} - {unitPriceLabel(item.product)}
+              </span>
             </span>
-            <span className="font-800 text-slate-950">${(Number(item.product.price) * item.quantity).toLocaleString('es-AR')}</span>
+            <span className="font-800 text-slate-950">{formatMoney(productPrice(item.product) * item.quantity)}</span>
           </div>
         ))}
       </div>
       <div className="mt-5 border-t border-slate-200 pt-4">
         <p className="flex justify-between text-lg font-800 text-slate-950">
           <span>Total</span>
-          <span>${total().toLocaleString('es-AR')}</span>
+          <span>{formatMoney(total())}</span>
         </p>
       </div>
     </aside>
@@ -596,7 +674,7 @@ function OrderRow({ order }: { order: Order }) {
         <StatusBadge status={order.status} />
       </div>
       <p className="mt-3 text-sm text-slate-600">
-        {order.items.length} productos · ${Number(order.total).toLocaleString('es-AR')}
+        {order.items.length} productos · {formatMoney(order.total)}
       </p>
       <p className="mt-1 text-sm text-slate-500">Reparto {new Date(`${order.dispatch_date}T00:00:00`).toLocaleDateString('es-AR')}</p>
       <Link className="mt-4 inline-flex min-h-11 items-center rounded-md border border-brand-200 px-4 font-800 text-brand-700" to={`/tracking/${order.id}`}>
