@@ -317,6 +317,8 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
+    await userEvent.type(screen.getByLabelText(/^email$/i), 'ventas@andina.local')
+    await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
     await userEvent.click(screen.getByRole('button', { name: /ingresar/i }))
 
     await waitFor(() => {

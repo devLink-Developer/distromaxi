@@ -44,7 +44,6 @@ export function LoginPage() {
             name="email"
             type="email"
             autoComplete="email"
-            defaultValue="ventas@andina.local"
             required
           />
         </label>
@@ -55,7 +54,6 @@ export function LoginPage() {
             name="password"
             type="password"
             autoComplete="current-password"
-            defaultValue="Demo1234!"
             required
           />
         </label>
