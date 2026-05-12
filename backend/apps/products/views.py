@@ -1,5 +1,7 @@
 from rest_framework import viewsets
 
+from apps.distributors.models import Distributor
+from apps.distributors.utils import distributor_ids_covering_point, user_service_point
 from apps.distributors.utils import filter_by_distributor, get_user_distributor
 
 from .models import Product, ProductCategory, ProductSubCategory, ProductSupplier
@@ -62,7 +64,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         category = self.request.query_params.get("category")
         subcategory = self.request.query_params.get("subcategory")
         search = self.request.query_params.get("q")
-        if distributor_id:
+        if self.request.user.role == "COMMERCE":
+            point = user_service_point(self.request.user)
+            if point is None:
+                return queryset.none()
+            distributor_candidates = Distributor.objects.filter(active=True, service_area_mode__in=["COUNTRY", "POLYGON"])
+            if distributor_id:
+                distributor_candidates = distributor_candidates.filter(pk=distributor_id)
+            distributor_ids = distributor_ids_covering_point(distributor_candidates, *point)
+            queryset = queryset.filter(distributor_id__in=distributor_ids)
+        elif distributor_id:
             queryset = queryset.filter(distributor_id=distributor_id)
         elif self.request.user.role in {"DISTRIBUTOR", "DRIVER"}:
             queryset = filter_by_distributor(queryset, self.request.user)

@@ -10,6 +10,12 @@ class SubscriptionStatus(models.TextChoices):
     SUSPENDED = "SUSPENDED", "Suspendida"
 
 
+class ServiceAreaMode(models.TextChoices):
+    NONE = "NONE", "Sin alcance"
+    COUNTRY = "COUNTRY", "Pais completo"
+    POLYGON = "POLYGON", "Poligono"
+
+
 class DistributorOnboardingStatus(models.TextChoices):
     ACCOUNT_CREATED = "ACCOUNT_CREATED", "Cuenta creada"
     PLAN_SELECTED = "PLAN_SELECTED", "Plan seleccionado"
@@ -44,6 +50,13 @@ class Distributor(models.Model):
         choices=SubscriptionStatus.choices,
         default=SubscriptionStatus.TRIAL,
     )
+    service_area_mode = models.CharField(
+        max_length=16,
+        choices=ServiceAreaMode.choices,
+        default=ServiceAreaMode.NONE,
+    )
+    service_area_country = models.CharField(max_length=2, blank=True)
+    service_area_polygon = models.JSONField(null=True, blank=True)
     mercado_pago_link = models.URLField(blank=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

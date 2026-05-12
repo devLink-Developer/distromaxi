@@ -9,6 +9,7 @@ type IconName =
   | 'users'
   | 'bell'
   | 'route'
+  | 'map'
   | 'wallet'
   | 'upload'
   | 'search'
@@ -27,6 +28,7 @@ const paths: Record<IconName, string> = {
   users: 'M16 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0Zm-12 9c1.5-3 4.2-5 8-5s6.5 2 8 5M19 8a3 3 0 0 1 0 6m-14 0a3 3 0 0 1 0-6',
   bell: 'M18 16v-5a6 6 0 0 0-12 0v5l-2 2h16l-2-2Zm-8 4h4',
   route: 'M5 5h4v4H5V5Zm10 10h4v4h-4v-4ZM7 9c0 6 10-1 10 6',
+  map: 'm9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Zm0 0V3m6 18V6',
   wallet: 'M4 6h15a1 1 0 0 1 1 1v3h-5a3 3 0 0 0 0 6h5v3a1 1 0 0 1-1 1H4V6Zm11 6h6v2h-6a1 1 0 0 1 0-2Z',
   upload: 'M12 16V4m0 0 4 4m-4-4-4 4M4 16v4h16v-4',
   search: 'M10.5 18a7.5 7.5 0 1 1 5.3-12.8 7.5 7.5 0 0 1-5.3 12.8Zm5.5-2 5 5',

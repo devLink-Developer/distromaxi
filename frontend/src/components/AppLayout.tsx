@@ -28,6 +28,7 @@ const distributorLinks: AppLink[] = [
   { to: '/dashboard/products', label: 'Productos', icon: 'box' as const },
   { to: '/dashboard/stock', label: 'Stock', icon: 'orders' as const },
   { to: '/dashboard/customers', label: 'Clientes', icon: 'users' as const },
+  { to: '/dashboard/scope', label: 'Alcance', icon: 'map' as const },
   { to: '/dashboard/profile', label: 'Mi cuenta', icon: 'pin' as const },
   { to: '/dashboard/drivers', label: 'Choferes', icon: 'truck' as const },
   { to: '/dashboard/vehicles', label: 'Vehiculos', icon: 'truck' as const },

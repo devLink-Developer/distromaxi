@@ -5,8 +5,8 @@ from .models import Distributor, DistributorOnboarding
 
 @admin.register(Distributor)
 class DistributorAdmin(admin.ModelAdmin):
-    list_display = ("business_name", "tax_id", "owner", "subscription_status", "active")
-    list_filter = ("subscription_status", "active")
+    list_display = ("business_name", "tax_id", "owner", "subscription_status", "service_area_mode", "active")
+    list_filter = ("subscription_status", "service_area_mode", "active")
     search_fields = ("business_name", "tax_id", "email", "phone")
 
 

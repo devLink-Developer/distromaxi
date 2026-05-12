@@ -1,6 +1,12 @@
 export type Role = 'ADMIN' | 'DISTRIBUTOR' | 'COMMERCE' | 'DRIVER'
 
 export type DistributorAccessState = 'NONE' | 'ONBOARDING' | 'REVIEW_REQUIRED' | 'FAILED' | 'ACTIVE'
+export type DistributorServiceAreaMode = 'NONE' | 'COUNTRY' | 'POLYGON'
+
+export type GeoJsonPolygon = {
+  type: 'Polygon'
+  coordinates: number[][][]
+}
 
 export type DistributorAccess = {
   state: DistributorAccessState
@@ -47,6 +53,9 @@ export type Distributor = {
   currency: string
   plan_name: string
   subscription_status: string
+  service_area_mode: DistributorServiceAreaMode
+  service_area_country: string
+  service_area_polygon: GeoJsonPolygon | null
   mercado_pago_link: string
   can_operate: boolean
   active: boolean

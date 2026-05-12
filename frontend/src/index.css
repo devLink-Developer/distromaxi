@@ -168,6 +168,56 @@ a {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
 }
 
+.service-area-map-canvas {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: #e2e8f0;
+}
+
+.service-area-map-canvas .leaflet-pane {
+  z-index: 1 !important;
+}
+
+.service-area-map-canvas .leaflet-top,
+.service-area-map-canvas .leaflet-bottom,
+.service-area-map-canvas .leaflet-control {
+  z-index: 2 !important;
+}
+
+.service-area-map-canvas .leaflet-control-zoom {
+  border: 0;
+  box-shadow: none;
+}
+
+.service-area-map-canvas .leaflet-control-zoom a {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+}
+
+.service-area-vertex-marker {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+}
+
+.service-area-vertex-marker span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #0369a1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.28);
+}
+
 @keyframes address-map-pulse {
   0% {
     transform: scale(0.72);

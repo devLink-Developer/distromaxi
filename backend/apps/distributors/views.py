@@ -16,7 +16,7 @@ from apps.distributors.services import (
     mark_onboarding_review,
     update_existing_subscription,
 )
-from apps.distributors.utils import filter_by_distributor, get_user_distributor
+from apps.distributors.utils import distributor_ids_covering_point, filter_by_distributor, get_user_distributor, user_service_point
 from apps.users.serializers import UserSerializer
 
 from .models import Distributor, DistributorDeliverySlot, DistributorOnboarding, DistributorOnboardingStatus
@@ -39,6 +39,13 @@ class DistributorViewSet(viewsets.ModelViewSet):
             return queryset
         if user.role == "DISTRIBUTOR":
             return queryset.filter(owner=user)
+        if user.role == "COMMERCE":
+            point = user_service_point(user)
+            if point is None:
+                return queryset.none()
+            candidates = queryset.filter(active=True, service_area_mode__in=["COUNTRY", "POLYGON"])
+            distributor_ids = distributor_ids_covering_point(candidates, *point)
+            return queryset.filter(id__in=distributor_ids)
         return queryset.filter(active=True)
 
     def get_permissions(self):

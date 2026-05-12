@@ -9,7 +9,7 @@ from apps.users.models import UserRole
 
 from .models import Distributor, DistributorDeliverySlot, DistributorOnboarding, DistributorOnboardingStatus
 from .services import onboarding_snapshot_for_user
-from .utils import get_user_distributor
+from .utils import get_user_distributor, normalize_service_area
 
 User = get_user_model()
 
@@ -39,6 +39,9 @@ class DistributorSerializer(serializers.ModelSerializer):
             "currency",
             "plan_name",
             "subscription_status",
+            "service_area_mode",
+            "service_area_country",
+            "service_area_polygon",
             "mercado_pago_link",
             "active",
             "can_operate",
@@ -70,24 +73,37 @@ class DistributorSerializer(serializers.ModelSerializer):
             changed = forbidden.intersection(attrs.keys())
             if changed:
                 raise serializers.ValidationError("Solo admin puede editar los datos comerciales o de suscripcion.")
-        address = attrs.get("address", getattr(self.instance, "address", ""))
-        postal_code = attrs.get("postal_code", getattr(self.instance, "postal_code", ""))
-        city = attrs.get("city", getattr(self.instance, "city", ""))
-        province = attrs.get("province", getattr(self.instance, "province", ""))
-        latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
-        longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
-        is_admin_user = bool(user and user.is_authenticated and (user.role == UserRole.ADMIN or user.is_superuser))
-        has_address_payload = bool(address or postal_code or city or province or latitude is not None or longitude is not None)
-        if has_address_payload and is_admin_user:
-            has_partial_geodata = bool(postal_code or city or province or latitude is not None or longitude is not None)
-            if has_partial_geodata and (
-                not address or not postal_code or not city or not province or latitude is None or longitude is None
-            ):
-                raise serializers.ValidationError("Completa la direccion geolocalizada o deja la direccion vacia para cargarla despues.")
-        elif address and (not postal_code or not city or not province):
-            raise serializers.ValidationError("Completa codigo postal, ciudad y provincia para guardar la direccion.")
-        elif address and (latitude is None or longitude is None):
-            raise serializers.ValidationError("Debes geolocalizar la direccion antes de guardarla.")
+        service_area_fields = {"service_area_mode", "service_area_country", "service_area_polygon"}
+        if service_area_fields.intersection(attrs.keys()):
+            try:
+                normalized_area = normalize_service_area(
+                    attrs.get("service_area_mode", getattr(self.instance, "service_area_mode", None)),
+                    attrs.get("service_area_country", getattr(self.instance, "service_area_country", "")),
+                    attrs.get("service_area_polygon", getattr(self.instance, "service_area_polygon", None)),
+                )
+            except ValueError as exc:
+                raise serializers.ValidationError({"service_area_polygon": str(exc)}) from exc
+            attrs.update(normalized_area)
+        address_fields = {"address", "postal_code", "city", "province", "latitude", "longitude"}
+        if self.instance is None or address_fields.intersection(attrs.keys()):
+            address = attrs.get("address", getattr(self.instance, "address", ""))
+            postal_code = attrs.get("postal_code", getattr(self.instance, "postal_code", ""))
+            city = attrs.get("city", getattr(self.instance, "city", ""))
+            province = attrs.get("province", getattr(self.instance, "province", ""))
+            latitude = attrs.get("latitude", getattr(self.instance, "latitude", None))
+            longitude = attrs.get("longitude", getattr(self.instance, "longitude", None))
+            is_admin_user = bool(user and user.is_authenticated and (user.role == UserRole.ADMIN or user.is_superuser))
+            has_address_payload = bool(address or postal_code or city or province or latitude is not None or longitude is not None)
+            if has_address_payload and is_admin_user:
+                has_partial_geodata = bool(postal_code or city or province or latitude is not None or longitude is not None)
+                if has_partial_geodata and (
+                    not address or not postal_code or not city or not province or latitude is None or longitude is None
+                ):
+                    raise serializers.ValidationError("Completa la direccion geolocalizada o deja la direccion vacia para cargarla despues.")
+            elif address and (not postal_code or not city or not province):
+                raise serializers.ValidationError("Completa codigo postal, ciudad y provincia para guardar la direccion.")
+            elif address and (latitude is None or longitude is None):
+                raise serializers.ValidationError("Debes geolocalizar la direccion antes de guardarla.")
         return attrs
 
 

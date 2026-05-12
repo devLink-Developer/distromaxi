@@ -53,6 +53,8 @@ class DistroMaxiFlowTests(TestCase):
             phone="111",
             address="Base 1",
             subscription_status="ACTIVE",
+            service_area_mode="COUNTRY",
+            service_area_country="AR",
         )
         self.commerce = Commerce.objects.create(
             user=self.commerce_user,
@@ -233,6 +235,38 @@ class DistroMaxiFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("delivery_address", response.data)
+
+    def test_commerce_cannot_order_outside_distributor_scope(self):
+        self.distributor.service_area_mode = "POLYGON"
+        self.distributor.service_area_country = ""
+        self.distributor.service_area_polygon = {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [-59.10, -35.10],
+                    [-58.90, -35.10],
+                    [-58.90, -34.90],
+                    [-59.10, -34.90],
+                    [-59.10, -35.10],
+                ]
+            ],
+        }
+        self.distributor.save(update_fields=["service_area_mode", "service_area_country", "service_area_polygon", "updated_at"])
+
+        self.client.force_authenticate(self.commerce_user)
+        response = self.client.post(
+            "/api/orders/",
+            {
+                "delivery_address": "Cliente 1",
+                "line_items": [{"product_id": self.product.id, "quantity": "1.000"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("distributor", response.data)
+        stock = StockItem.objects.get(product=self.product)
+        self.assertEqual(stock.reserved_quantity, Decimal("0.000"))
 
     def test_delivery_location_tracking(self):
         order = Order.objects.create(

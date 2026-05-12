@@ -19,6 +19,7 @@ import { AddressEditor } from '../components/AddressEditor'
 import { EmptyState } from '../components/EmptyState'
 import { Icon } from '../components/Icon'
 import { ResourceManager, type FieldConfig, type ResourceRow } from '../components/ResourceManager'
+import { ServiceAreaMap, type ServiceAreaPoint } from '../components/ServiceAreaMap'
 import { StatusBadge } from '../components/StatusBadge'
 import { useDashboard } from '../hooks/useDashboard'
 import { api } from '../services/api'
@@ -27,6 +28,8 @@ import type {
   DashboardFilters,
   DashboardPoint,
   Distributor,
+  DistributorServiceAreaMode,
+  GeoJsonPolygon,
   ImportJob,
   Order,
   ProductCategory,
@@ -1526,6 +1529,331 @@ export function DistributorProfilePage() {
       />
     </section>
   )
+}
+
+export function DistributorScopePage() {
+  const [profile, setProfile] = useState<Distributor | null>(null)
+  const [mode, setMode] = useState<DistributorServiceAreaMode>('NONE')
+  const [points, setPoints] = useState<ServiceAreaPoint[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const showError = useFeedbackStore((state) => state.error)
+
+  useEffect(() => {
+    void api
+      .distributors()
+      .then((rows) => {
+        const current = rows[0] ?? null
+        setProfile(current)
+        setMode(current?.service_area_mode ?? 'NONE')
+        setPoints(polygonToServiceAreaPoints(current?.service_area_polygon ?? null))
+        setLoadFailed(false)
+      })
+      .catch(() => {
+        setLoadFailed(true)
+        showError('No pudimos cargar el alcance de la distribuidora.')
+      })
+      .finally(() => setLoading(false))
+  }, [showError])
+
+  useEffect(() => {
+    if (!fullscreen) return
+
+    const previousOverflow = document.body.style.overflow
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreen(false)
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [fullscreen])
+
+  async function saveScope() {
+    if (!profile) return
+    if (mode === 'POLYGON' && points.length < 3) {
+      showError('Dibuja al menos 3 puntos para guardar el poligono.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const updated = await api.update<Distributor>('distributors', profile.id, serviceAreaPayload(mode, points))
+      setProfile(updated)
+      setMode(updated.service_area_mode)
+      setPoints(polygonToServiceAreaPoints(updated.service_area_polygon))
+      showSuccess('Alcance actualizado.')
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No se pudo guardar el alcance.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function addPoint(point: ServiceAreaPoint) {
+    setPoints((current) => [...current, point])
+  }
+
+  function movePoint(index: number, point: ServiceAreaPoint) {
+    setPoints((current) => current.map((item, itemIndex) => (itemIndex === index ? point : item)))
+  }
+
+  if (loading) {
+    return <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando alcance...</div>
+  }
+
+  if (!profile) {
+    return loadFailed ? (
+      <EmptyState title="No pudimos cargar el alcance" text="Intenta de nuevo en unos segundos." />
+    ) : (
+      <EmptyState title="Todavia no hay una distribuidora asociada" text="Cuando la cuenta quede lista, vas a poder configurar el alcance." />
+    )
+  }
+
+  const polygonIsValid = points.length >= 3
+  const saveDisabled = saving || (mode === 'POLYGON' && !polygonIsValid)
+
+  return (
+    <section className="grid gap-5">
+      <div className="grid gap-2">
+        <p className="text-sm font-800 uppercase tracking-[0.14em] text-brand-700">Configuracion comercial</p>
+        <h1 className="text-2xl font-800 text-slate-950">Alcance de venta</h1>
+        <p className="max-w-3xl text-sm leading-6 text-slate-600">
+          Define donde aparece tu distribuidora para los clientes. Si no hay alcance configurado, no se muestra en el catalogo.
+        </p>
+      </div>
+
+      <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+        <div className="grid gap-3 md:grid-cols-3">
+          <ScopeModeButton
+            active={mode === 'NONE'}
+            title="Sin alcance"
+            text="Oculta la distribuidora para clientes hasta configurar una zona."
+            onClick={() => setMode('NONE')}
+          />
+          <ScopeModeButton
+            active={mode === 'COUNTRY'}
+            title="Todo Argentina"
+            text="Muestra la distribuidora a clientes con direccion geolocalizada en Argentina."
+            onClick={() => setMode('COUNTRY')}
+          />
+          <ScopeModeButton
+            active={mode === 'POLYGON'}
+            title="Poligono"
+            text="Dibuja una zona operativa exacta sobre el mapa."
+            onClick={() => setMode('POLYGON')}
+          />
+        </div>
+
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+          <span className="font-800 text-slate-950">{serviceAreaModeLabel(mode)}.</span> {serviceAreaModeHelp(mode, points.length)}
+        </div>
+      </div>
+
+      {mode === 'POLYGON' ? (
+        <div className="grid gap-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-800 text-slate-950">Mapa de alcance</h2>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Haz click para sumar vertices y arrastralos para ajustar la zona.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-800 text-slate-700 transition hover:border-brand-500 hover:text-brand-700"
+                type="button"
+                onClick={() => setFullscreen(true)}
+              >
+                <Icon name="map" className="h-4 w-4" />
+                Pantalla completa
+              </button>
+              <button
+                className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-800 text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                type="button"
+                disabled={points.length === 0}
+                onClick={() => setPoints((current) => current.slice(0, -1))}
+              >
+                Deshacer
+              </button>
+              <button
+                className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-800 text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                type="button"
+                disabled={points.length === 0}
+                onClick={() => setPoints([])}
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+            <ServiceAreaMap points={points} disabled={saving} onAddPoint={addPoint} onMovePoint={movePoint} />
+            <aside className="grid content-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+              <div>
+                <p className="text-sm font-800 text-slate-950">{points.length} vertices</p>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {polygonIsValid ? 'El poligono esta listo para guardar.' : 'Faltan puntos para cerrar la zona.'}
+                </p>
+              </div>
+              <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
+                {points.length === 0 ? (
+                  <p className="text-sm text-slate-500">Todavia no hay vertices.</p>
+                ) : (
+                  points.map((point, index) => (
+                    <div key={`${index}-${point.latitude}-${point.longitude}`} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-700 text-slate-600">
+                      #{index + 1} {formatCoordinate(point.latitude)}, {formatCoordinate(point.longitude)}
+                    </div>
+                  ))
+                )}
+              </div>
+            </aside>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm leading-6 text-slate-600">{currentScopeSummary(profile)}</p>
+        <button
+          className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          type="button"
+          disabled={saveDisabled}
+          onClick={() => void saveScope()}
+        >
+          {saving ? 'Guardando...' : 'Guardar alcance'}
+        </button>
+      </div>
+
+      {fullscreen ? (
+        <div className="fixed inset-0 z-[1200] grid bg-slate-950/80 p-3 backdrop-blur-sm md:p-6" role="dialog" aria-modal="true" aria-label="Mapa de alcance en pantalla completa">
+          <div className="grid min-h-0 overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div>
+                <p className="text-sm font-800 text-slate-950">Mapa de alcance</p>
+                <p className="text-sm text-slate-600">{points.length} vertices seleccionados</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-800 text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                  type="button"
+                  disabled={points.length === 0}
+                  onClick={() => setPoints((current) => current.slice(0, -1))}
+                >
+                  Deshacer
+                </button>
+                <button
+                  className="min-h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-800 text-slate-700 transition hover:border-slate-300 disabled:opacity-50"
+                  type="button"
+                  disabled={points.length === 0}
+                  onClick={() => setPoints([])}
+                >
+                  Limpiar
+                </button>
+                <button
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-800 text-white transition hover:bg-slate-800"
+                  type="button"
+                  onClick={() => setFullscreen(false)}
+                >
+                  <Icon name="close" className="h-4 w-4" />
+                  Cerrar
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 p-3">
+              <ServiceAreaMap points={points} disabled={saving} fullscreen onAddPoint={addPoint} onMovePoint={movePoint} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function ScopeModeButton({
+  active,
+  title,
+  text,
+  onClick,
+}: {
+  active: boolean
+  title: string
+  text: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      className={`grid min-h-28 gap-2 rounded-md border p-4 text-left transition ${
+        active ? 'border-brand-500 bg-brand-50 text-brand-950' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300'
+      }`}
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      <span className="text-base font-800">{title}</span>
+      <span className="text-sm leading-6">{text}</span>
+    </button>
+  )
+}
+
+function serviceAreaPayload(mode: DistributorServiceAreaMode, points: ServiceAreaPoint[]) {
+  if (mode === 'COUNTRY') {
+    return { service_area_mode: 'COUNTRY', service_area_country: 'AR' }
+  }
+  if (mode === 'POLYGON') {
+    return { service_area_mode: 'POLYGON', service_area_polygon: serviceAreaPointsToPolygon(points) }
+  }
+  return { service_area_mode: 'NONE' }
+}
+
+function polygonToServiceAreaPoints(polygon: GeoJsonPolygon | null): ServiceAreaPoint[] {
+  const ring = polygon?.coordinates?.[0] ?? []
+  const openRing = ring.length > 1 && coordinatesMatch(ring[0], ring[ring.length - 1]) ? ring.slice(0, -1) : ring
+  return openRing
+    .map(([longitude, latitude]) => ({ latitude, longitude }))
+    .filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
+}
+
+function serviceAreaPointsToPolygon(points: ServiceAreaPoint[]): GeoJsonPolygon {
+  const ring = points.map((point) => [roundCoordinate(point.longitude), roundCoordinate(point.latitude)])
+  if (ring.length > 0) ring.push([...ring[0]])
+  return { type: 'Polygon', coordinates: [ring] }
+}
+
+function coordinatesMatch(first: number[], second: number[]) {
+  return first.length >= 2 && second.length >= 2 && first[0] === second[0] && first[1] === second[1]
+}
+
+function roundCoordinate(value: number) {
+  return Number(value.toFixed(7))
+}
+
+function formatCoordinate(value: number) {
+  return value.toFixed(5)
+}
+
+function serviceAreaModeLabel(mode: DistributorServiceAreaMode) {
+  if (mode === 'COUNTRY') return 'Todo Argentina'
+  if (mode === 'POLYGON') return 'Poligono'
+  return 'Sin alcance'
+}
+
+function serviceAreaModeHelp(mode: DistributorServiceAreaMode, pointCount: number) {
+  if (mode === 'COUNTRY') return 'Los clientes geolocalizados en Argentina podran encontrar tu distribuidora.'
+  if (mode === 'POLYGON') return pointCount >= 3 ? 'El mapa tiene los puntos minimos para guardar.' : 'Necesitas al menos 3 vertices para guardar.'
+  return 'Los clientes no veran esta distribuidora ni sus productos.'
+}
+
+function currentScopeSummary(profile: Distributor) {
+  if (profile.service_area_mode === 'COUNTRY') return 'Alcance actual: todo Argentina.'
+  if (profile.service_area_mode === 'POLYGON') {
+    return `Alcance actual: poligono con ${polygonToServiceAreaPoints(profile.service_area_polygon).length} vertices.`
+  }
+  return 'Alcance actual: sin alcance configurado.'
 }
 
 export function AdminDistributorsPage() {

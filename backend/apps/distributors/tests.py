@@ -1,10 +1,12 @@
 from unittest.mock import patch
 from datetime import time
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from apps.commerces.models import Commerce
 from apps.billing.models import Plan, Subscription
 from apps.distributors.models import Distributor, DistributorDeliverySlot, DistributorOnboarding
 
@@ -110,6 +112,106 @@ class DistributorAdminFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("end_time", response.data)
+
+
+class DistributorServiceAreaApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.distributor_user = User.objects.create_user(
+            email="owner-scope@test.local",
+            password="Demo1234!",
+            full_name="Owner Alcance",
+            role="DISTRIBUTOR",
+        )
+        self.commerce_user = User.objects.create_user(
+            email="cliente-scope@test.local",
+            password="Demo1234!",
+            full_name="Cliente Alcance",
+            role="COMMERCE",
+        )
+        self.distributor = Distributor.objects.create(
+            owner=self.distributor_user,
+            business_name="Distribuidora Alcance",
+            tax_id="30-10101010-1",
+            contact_name="Ventas",
+            email="alcance@test.local",
+            phone="1111-5555",
+            address="Base 1",
+            active=True,
+            subscription_status="ACTIVE",
+        )
+        self.commerce = Commerce.objects.create(
+            user=self.commerce_user,
+            distributor=self.distributor,
+            trade_name="Cliente Centro",
+            contact_name="Compras",
+            phone="2222-3333",
+            postal_code="1414",
+            address="Humboldt 1400",
+            city="CABA",
+            province="Buenos Aires",
+            latitude=Decimal("-34.5841000"),
+            longitude=Decimal("-58.4351000"),
+        )
+
+    def test_default_none_scope_is_hidden_from_clients(self):
+        self.client.force_authenticate(self.commerce_user)
+
+        response = self.client.get("/api/distributors/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+    def test_country_scope_is_visible_for_geolocated_argentina_client(self):
+        self.distributor.service_area_mode = "COUNTRY"
+        self.distributor.service_area_country = "AR"
+        self.distributor.save(update_fields=["service_area_mode", "service_area_country", "updated_at"])
+        self.client.force_authenticate(self.commerce_user)
+
+        response = self.client.get("/api/distributors/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["id"] for row in response.data], [self.distributor.id])
+
+    def test_polygon_scope_only_shows_distributor_when_point_is_inside(self):
+        self.distributor.service_area_mode = "POLYGON"
+        self.distributor.service_area_polygon = {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [-58.50, -34.65],
+                    [-58.30, -34.65],
+                    [-58.30, -34.50],
+                    [-58.50, -34.50],
+                    [-58.50, -34.65],
+                ]
+            ],
+        }
+        self.distributor.save(update_fields=["service_area_mode", "service_area_polygon", "updated_at"])
+        self.client.force_authenticate(self.commerce_user)
+
+        inside_response = self.client.get("/api/distributors/")
+        self.commerce.latitude = Decimal("-34.8000000")
+        self.commerce.longitude = Decimal("-58.8000000")
+        self.commerce.save(update_fields=["latitude", "longitude", "updated_at"])
+        outside_response = self.client.get("/api/distributors/")
+
+        self.assertEqual([row["id"] for row in inside_response.data], [self.distributor.id])
+        self.assertEqual(outside_response.data, [])
+
+    def test_distributor_can_update_own_service_area(self):
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.patch(
+            f"/api/distributors/{self.distributor.id}/",
+            {"service_area_mode": "COUNTRY"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["service_area_mode"], "COUNTRY")
+        self.assertEqual(response.data["service_area_country"], "AR")
+        self.assertIsNone(response.data["service_area_polygon"])
 
 
 class DistributorOnboardingFlowTests(TestCase):

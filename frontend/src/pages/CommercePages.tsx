@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState'
 import { Icon } from '../components/Icon'
 import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
+import { useAuthStore } from '../stores/authStore'
 import { useCartStore } from '../stores/cartStore'
 import { useFeedbackStore } from '../stores/feedbackStore'
 import { useOrderStore } from '../stores/orderStore'
@@ -21,11 +22,16 @@ export function DistributorsPage() {
 
 function DistributorsDirectory({ title }: { title: string }) {
   const [distributors, setDistributors] = useState<Distributor[]>([])
+  const [commerce, setCommerce] = useState<Commerce | null | undefined>(undefined)
   const [query, setQuery] = useState('')
+  const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     void api.distributors().then(setDistributors)
-  }, [])
+    if (user?.role === 'COMMERCE') {
+      void api.commerces().then((rows) => setCommerce(rows[0] ?? null))
+    }
+  }, [user?.role])
 
   const filtered = distributors.filter((distributor) =>
     [distributor.business_name, distributor.city, distributor.province, distributor.address]
@@ -33,6 +39,7 @@ function DistributorsDirectory({ title }: { title: string }) {
       .toLowerCase()
       .includes(query.toLowerCase()),
   )
+  const needsGeolocatedAddress = user?.role === 'COMMERCE' && commerce !== undefined && (!commerce?.latitude || !commerce?.longitude)
 
   return (
     <section className="grid gap-6">
@@ -57,7 +64,17 @@ function DistributorsDirectory({ title }: { title: string }) {
         />
       </label>
 
-      {filtered.length === 0 ? (
+      {needsGeolocatedAddress ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+          <h2 className="text-lg font-800 text-amber-950">Carga tu direccion para ver distribuidoras</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900">
+            Solo mostramos distribuidoras que entregan en tu ubicacion. Guarda una direccion geolocalizada para continuar.
+          </p>
+          <Link className="mt-4 inline-flex min-h-11 items-center rounded-md bg-amber-900 px-4 text-sm font-800 text-white" to="/account/address">
+            Cargar direccion
+          </Link>
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState title="No hay distribuidoras" text="Proba con otra busqueda." />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

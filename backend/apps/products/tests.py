@@ -1,7 +1,10 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from apps.commerces.models import Commerce
 from apps.distributors.models import Distributor
 
 from .models import Product
@@ -124,3 +127,68 @@ class ProductConfigurationApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["category"], "Infusiones")
         self.assertEqual(response.data["category_name"], "Infusiones")
+
+
+class ProductServiceAreaApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.distributor_user = get_user_model().objects.create_user(
+            email="alcance-productos@test.local",
+            password="Demo1234!",
+            full_name="Ventas Alcance",
+            role="DISTRIBUTOR",
+        )
+        self.commerce_user = get_user_model().objects.create_user(
+            email="compras-productos@test.local",
+            password="Demo1234!",
+            full_name="Compras Alcance",
+            role="COMMERCE",
+        )
+        self.distributor = Distributor.objects.create(
+            owner=self.distributor_user,
+            business_name="Distribuidora Productos",
+            tax_id="30-77777777-1",
+            contact_name="Ventas",
+            email="alcance-productos@test.local",
+            phone="111",
+            address="Base",
+            active=True,
+            subscription_status="ACTIVE",
+        )
+        Commerce.objects.create(
+            user=self.commerce_user,
+            distributor=self.distributor,
+            trade_name="Cliente Productos",
+            contact_name="Compras",
+            phone="222",
+            postal_code="1414",
+            address="Humboldt 1400",
+            city="CABA",
+            province="Buenos Aires",
+            latitude=Decimal("-34.5841000"),
+            longitude=Decimal("-58.4351000"),
+        )
+        self.product = Product.objects.create(
+            distributor=self.distributor,
+            sku="SKU-SCOPE",
+            name="Producto fuera de alcance",
+            category="Bebidas",
+            unit="bulto",
+            weight=Decimal("8.000"),
+            weight_unit="kg",
+            length=Decimal("40.000"),
+            width=Decimal("30.000"),
+            height=Decimal("25.000"),
+            dimension_unit="cm",
+            price=Decimal("100.00"),
+        )
+
+    def test_commerce_cannot_read_products_from_distributor_without_scope(self):
+        self.client.force_authenticate(self.commerce_user)
+
+        list_response = self.client.get(f"/api/products/?distributor={self.distributor.id}")
+        detail_response = self.client.get(f"/api/products/{self.product.id}/")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.data, [])
+        self.assertEqual(detail_response.status_code, 404)

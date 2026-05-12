@@ -14,6 +14,7 @@ import {
   DashboardPage,
   DeliverySlotsManagerPage,
   DistributorProfilePage,
+  DistributorScopePage,
   DriversManagerPage,
   ImportsPage,
   ProductsManagerPage,
@@ -83,6 +84,7 @@ export function App() {
               <Route path="/dashboard/routing" element={<DashboardRoutingPage />} />
               <Route path="/dashboard/delivery-slots" element={<DeliverySlotsManagerPage />} />
               <Route path="/dashboard/customers" element={<CustomersManagerPage />} />
+              <Route path="/dashboard/scope" element={<DistributorScopePage />} />
               <Route path="/dashboard/profile" element={<DistributorProfilePage />} />
               <Route path="/dashboard/drivers" element={<DriversManagerPage />} />
               <Route path="/dashboard/vehicles" element={<VehiclesManagerPage />} />

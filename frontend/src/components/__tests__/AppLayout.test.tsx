@@ -52,6 +52,7 @@ describe('AppLayout', () => {
     const dialog = screen.getByRole('dialog', { name: /menu de navegacion/i })
 
     expect(within(dialog).getByRole('link', { name: /vehiculos/i })).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: /alcance/i })).toBeInTheDocument()
     expect(within(dialog).getByRole('link', { name: /plan/i })).toBeInTheDocument()
 
     await userEvent.click(within(dialog).getByRole('link', { name: /vehiculos/i }))

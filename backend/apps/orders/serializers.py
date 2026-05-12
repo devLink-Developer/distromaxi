@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.distributors.utils import distributor_contains_point
 from apps.distributors.models import DistributorDeliverySlot
 from apps.inventory.services import reserve_stock
 from apps.products.models import Product
@@ -118,6 +119,10 @@ class OrderSerializer(serializers.ModelSerializer):
             validated_data.setdefault("delivery_longitude", commerce.longitude)
             validated_data.setdefault("delivery_window_start", commerce.default_window_start)
             validated_data.setdefault("delivery_window_end", commerce.default_window_end)
+        if getattr(getattr(request, "user", None), "role", None) == "COMMERCE":
+            distributor = validated_data.get("distributor")
+            if commerce is None or distributor is None or not distributor_contains_point(distributor, commerce.latitude, commerce.longitude):
+                raise serializers.ValidationError({"distributor": "La distribuidora no entrega en la direccion del cliente."})
         delivery_slot = validated_data.get("delivery_slot")
         if delivery_slot is not None:
             validated_data["delivery_window_start"] = delivery_slot.start_time
