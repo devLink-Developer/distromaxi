@@ -2,8 +2,10 @@ const labels: Record<string, string> = {
   PENDING: 'Pendiente',
   ACCEPTED: 'Aceptado',
   PREPARING: 'Preparando',
+  SCHEDULED: 'Programado',
   ON_THE_WAY: 'En camino',
   DELIVERED: 'Entregado',
+  REJECTED: 'Rechazado',
   CANCELLED: 'Cancelado',
   ACTIVE: 'Activa',
   TRIAL: 'Prueba',
@@ -20,9 +22,9 @@ export function StatusBadge({ status }: { status: string }) {
   const tone =
     status === 'DELIVERED' || status === 'ACTIVE' || status === 'AVAILABLE'
       ? 'bg-mint-50 text-mint-700 ring-mint-500/20'
-      : status === 'CANCELLED' || status === 'PAST_DUE' || status === 'SUSPENDED' || status === 'INACTIVE'
+      : status === 'CANCELLED' || status === 'REJECTED' || status === 'PAST_DUE' || status === 'SUSPENDED' || status === 'INACTIVE'
         ? 'bg-red-50 text-red-700 ring-red-500/20'
-        : status === 'MAINTENANCE'
+        : status === 'MAINTENANCE' || status === 'SCHEDULED'
           ? 'bg-amber-50 text-amber-800 ring-amber-500/20'
         : 'bg-brand-50 text-brand-700 ring-brand-500/20'
   return (

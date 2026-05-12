@@ -49,11 +49,31 @@ type RouteFilterSummary = {
   m3: number
 }
 
+const orderStatusFilterOptions = [
+  { id: 'ALL', label: 'Todos', statuses: [] },
+  { id: 'PENDING', label: 'Pendientes', statuses: ['PENDING'] },
+  { id: 'IN_PROGRESS', label: 'Aceptados', statuses: ['ACCEPTED', 'PREPARING'] },
+  { id: 'ROUTING', label: 'En reparto', statuses: ['SCHEDULED', 'ON_THE_WAY'] },
+  { id: 'CLOSED', label: 'Cerrados', statuses: ['DELIVERED', 'REJECTED', 'CANCELLED'] },
+]
+
+const orderStatusPriority: Record<string, number> = {
+  PENDING: 0,
+  ACCEPTED: 1,
+  PREPARING: 2,
+  SCHEDULED: 3,
+  ON_THE_WAY: 4,
+  DELIVERED: 5,
+  REJECTED: 6,
+  CANCELLED: 7,
+}
+
 export function DashboardOrdersRoutingPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [commerces, setCommerces] = useState<Commerce[]>([])
   const [deliverySlots, setDeliverySlots] = useState<DistributorDeliverySlot[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [slotFilter, setSlotFilter] = useState('ALL')
   const [dateFilter, setDateFilter] = useState('')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -73,21 +93,29 @@ export function DashboardOrdersRoutingPage() {
   const visibleOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase()
     return orders.filter((order) => {
-      if (statusFilter !== 'ALL' && order.status !== statusFilter) return false
+      if (!statusFilterMatches(order.status, statusFilter)) return false
       if (dateFilter && order.dispatch_date !== dateFilter) return false
+      if (!slotFilterMatches(order, slotFilter)) return false
       if (!normalizedQuery) return true
       return [String(order.id), order.commerce_name, order.distributor_name, order.delivery_address]
         .filter(Boolean)
         .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
-    })
-  }, [dateFilter, orders, query, statusFilter])
+    }).sort(compareOrdersForWork)
+  }, [dateFilter, orders, query, slotFilter, statusFilter])
   const metrics = useMemo(
-    () => ({
-      total: orders.length,
-      pending: orders.filter((order) => order.status === 'PENDING').length,
-      accepted: orders.filter((order) => ['ACCEPTED', 'PREPARING'].includes(order.status)).length,
-      rejected: orders.filter((order) => order.status === 'REJECTED').length,
-    }),
+    () =>
+      orders.reduce(
+        (accumulator, order) => {
+          accumulator.total += 1
+          if (order.status === 'PENDING') accumulator.pending += 1
+          if (['ACCEPTED', 'PREPARING'].includes(order.status)) accumulator.accepted += 1
+          if (['SCHEDULED', 'ON_THE_WAY'].includes(order.status)) accumulator.routing += 1
+          if (order.status === 'REJECTED') accumulator.rejected += 1
+          if (['PENDING', 'ACCEPTED', 'PREPARING'].includes(order.status) && !order.delivery_slot) accumulator.unplanned += 1
+          return accumulator
+        },
+        { total: 0, pending: 0, accepted: 0, routing: 0, rejected: 0, unplanned: 0 },
+      ),
     [orders],
   )
 
@@ -96,11 +124,18 @@ export function DashboardOrdersRoutingPage() {
     async function load() {
       setLoading(true)
       try {
-        const [loadedOrders, loadedSlots, loadedCommerces] = await Promise.all([api.orders(), api.deliverySlots(), api.commerces()])
+        const [loadedOrders, loadedSlots] = await Promise.all([api.orders(), api.deliverySlots()])
         if (disposed) return
         setOrders(loadedOrders)
         setDeliverySlots(loadedSlots)
-        setCommerces(loadedCommerces)
+        void api
+          .commerces()
+          .then((loadedCommerces) => {
+            if (!disposed) setCommerces(loadedCommerces)
+          })
+          .catch(() => {
+            if (!disposed) showError('No pudimos cargar los datos completos de clientes.')
+          })
       } catch (caught) {
         if (!disposed) showError(caught instanceof Error ? caught.message : 'No se pudieron cargar los pedidos.')
       } finally {
@@ -128,7 +163,8 @@ export function DashboardOrdersRoutingPage() {
   }, [selectedCustomerOrder])
 
   function openSchedule(order: Order) {
-    const fallbackSlotId = order.delivery_slot ?? activeSlots[0]?.id ?? 0
+    const activeSlotIds = new Set(activeSlots.map((slot) => slot.id))
+    const fallbackSlotId = order.delivery_slot && activeSlotIds.has(order.delivery_slot) ? order.delivery_slot : activeSlots[0]?.id ?? 0
     setActiveOrderId((current) => (current === order.id ? null : order.id))
     setDrafts((current) => ({
       ...current,
@@ -152,7 +188,10 @@ export function DashboardOrdersRoutingPage() {
   }
 
   async function acceptOrder(order: Order) {
-    const draft = drafts[order.id]
+    const draft = drafts[order.id] ?? {
+      dispatch_date: order.dispatch_date || defaultRouteDate(),
+      delivery_slot_id: order.delivery_slot ?? activeSlots[0]?.id ?? 0,
+    }
     if (!draft?.dispatch_date || !draft.delivery_slot_id) {
       setActionError('Selecciona fecha de entrega y franja para aceptar el pedido.')
       return
@@ -231,28 +270,44 @@ export function DashboardOrdersRoutingPage() {
     <section className="grid gap-5">
       <div className="grid gap-4 border-b border-slate-200 pb-5 xl:grid-cols-[1fr_auto] xl:items-end">
         <div className="max-w-3xl">
-          <h1 className="text-2xl font-800 text-slate-950">Gestion de pedidos</h1>
+          <h1 className="text-2xl font-800 text-slate-950">Pedidos</h1>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            Revisa articulos, acepta o rechaza pedidos y coordina fecha de entrega con una franja configurada por la distribuidora.
+            Bandeja de trabajo para aceptar, rechazar y coordinar entregas sin salir de la lista.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <OrderMetric label="Total" value={metrics.total} />
-          <OrderMetric label="Pendientes" value={metrics.pending} />
-          <OrderMetric label="Aceptados" value={metrics.accepted} />
-          <OrderMetric label="Rechazados" value={metrics.rejected} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <OrderMetric active={statusFilter === 'ALL'} label="Total" value={metrics.total} onClick={() => setStatusFilter('ALL')} />
+          <OrderMetric active={statusFilter === 'PENDING'} label="Pendientes" value={metrics.pending} tone="urgent" onClick={() => setStatusFilter('PENDING')} />
+          <OrderMetric active={statusFilter === 'IN_PROGRESS'} label="Aceptados" value={metrics.accepted} onClick={() => setStatusFilter('IN_PROGRESS')} />
+          <OrderMetric active={statusFilter === 'ROUTING'} label="En reparto" value={metrics.routing} onClick={() => setStatusFilter('ROUTING')} />
+          <OrderMetric label="Sin franja" value={metrics.unplanned} tone="warning" onClick={() => setSlotFilter('NONE')} />
         </div>
       </div>
 
       <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-        <div className="grid gap-3 lg:grid-cols-[10rem_11rem_minmax(0,1fr)] lg:items-end">
+        <div className="flex flex-wrap gap-2">
+          {orderStatusFilterOptions.map((option) => (
+            <button
+              key={option.id}
+              className={`min-h-10 rounded-md border px-3 text-sm font-800 transition ${
+                statusFilter === option.id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700'
+              }`}
+              type="button"
+              aria-pressed={statusFilter === option.id}
+              onClick={() => setStatusFilter(option.id)}
+            >
+              {option.label} <span className="text-xs font-800 text-slate-400">{countOrdersByStatusFilter(orders, option.id)}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[11rem_11rem_11rem_minmax(0,1fr)] lg:items-end">
           <label className="grid gap-1 text-sm font-700 text-slate-700">
             Estado
             <select className="min-h-11 rounded-md border border-slate-300 bg-white px-3" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="ALL">Todos</option>
-              {['PENDING', 'ACCEPTED', 'PREPARING', 'SCHEDULED', 'ON_THE_WAY', 'DELIVERED', 'REJECTED', 'CANCELLED'].map((status) => (
-                <option key={status} value={status}>
-                  {statusLabel(status)}
+              {orderStatusFilterOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -260,6 +315,18 @@ export function DashboardOrdersRoutingPage() {
           <label className="grid gap-1 text-sm font-700 text-slate-700">
             Fecha de entrega
             <input className="min-h-11 rounded-md border border-slate-300 px-3" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-sm font-700 text-slate-700">
+            Franja
+            <select className="min-h-11 rounded-md border border-slate-300 bg-white px-3" value={slotFilter} onChange={(event) => setSlotFilter(event.target.value)}>
+              <option value="ALL">Todas</option>
+              <option value="NONE">Sin franja</option>
+              {activeSlots.map((slot) => (
+                <option key={slot.id} value={slot.id}>
+                  {deliverySlotLabel(slot)}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="grid gap-1 text-sm font-700 text-slate-700">
             Cliente o pedido
@@ -271,6 +338,31 @@ export function DashboardOrdersRoutingPage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <p className="text-sm font-700 text-slate-500">
+            Mostrando {visibleOrders.length} de {orders.length} pedidos. Ordenados por accion pendiente.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => setDateFilter(addDaysIso(0))}>
+              Hoy
+            </button>
+            <button className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => setDateFilter(addDaysIso(1))}>
+              Maniana
+            </button>
+            <button
+              className="min-h-10 rounded-md border border-slate-200 px-3 text-sm font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+              type="button"
+              onClick={() => {
+                setStatusFilter('ALL')
+                setSlotFilter('ALL')
+                setDateFilter('')
+                setQuery('')
+              }}
+            >
+              Limpiar filtros
+            </button>
+          </div>
         </div>
         {activeSlots.length === 0 ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-700 text-amber-900">
@@ -298,7 +390,7 @@ export function DashboardOrdersRoutingPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {visibleOrders.map((order) => (
-                  <tr key={order.id} className="align-top">
+                  <tr key={order.id} className="align-top transition hover:bg-slate-50/70">
                     <td className="px-4 py-4">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -321,6 +413,7 @@ export function DashboardOrdersRoutingPage() {
                     <td className="px-4 py-4">
                       <p className="font-800 text-slate-950">{formatOrderDate(order.dispatch_date)}</p>
                       <p className="mt-1 text-slate-600">{deliverySlotSummary(order)}</p>
+                      <OrderDeliveryFlags customer={commerceById.get(order.commerce) ?? null} order={order} />
                       <p className="mt-1 line-clamp-2 text-xs font-700 text-slate-500">{order.delivery_address}</p>
                     </td>
                     <td className="px-4 py-4 font-800 text-slate-950">{formatMoney(order.total)}</td>
@@ -362,12 +455,12 @@ export function DashboardOrdersRoutingPage() {
                   </div>
                   <StatusBadge status={order.status} />
                 </div>
-                <OrderItemsList order={order} />
                 <div className="grid gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
                   <p className="font-800 text-slate-950">{formatMoney(order.total)}</p>
                   <p className="text-slate-600">
                     {formatOrderDate(order.dispatch_date)} - {deliverySlotSummary(order)}
                   </p>
+                  <OrderDeliveryFlags customer={commerceById.get(order.commerce) ?? null} order={order} />
                   <p className="line-clamp-2 text-xs font-700 text-slate-500">{order.delivery_address}</p>
                 </div>
                 <OrderDecisionControls
@@ -383,6 +476,7 @@ export function DashboardOrdersRoutingPage() {
                   onSaveSchedule={() => void saveSchedule(order)}
                   onUpdateDraft={(patch) => updateDraft(order.id, patch)}
                 />
+                <OrderItemsList order={order} />
               </article>
             ))}
           </section>
@@ -399,12 +493,36 @@ export function DashboardOrdersRoutingPage() {
   )
 }
 
-function OrderMetric({ label, value }: { label: string; value: number }) {
+function OrderMetric({
+  label,
+  value,
+  active = false,
+  tone = 'neutral',
+  onClick,
+}: {
+  label: string
+  value: number
+  active?: boolean
+  tone?: 'neutral' | 'urgent' | 'warning'
+  onClick: () => void
+}) {
+  const toneClass =
+    tone === 'urgent'
+      ? 'text-red-700'
+      : tone === 'warning'
+        ? 'text-amber-800'
+        : 'text-slate-950'
   return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-right">
+    <button
+      className={`min-h-16 rounded-md border bg-white px-3 py-2 text-right transition hover:border-brand-300 hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 ${
+        active ? 'border-brand-500 bg-brand-50' : 'border-slate-200'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
       <p className="text-[11px] font-800 uppercase text-slate-500">{label}</p>
-      <p className="text-lg font-800 text-slate-950">{value}</p>
-    </div>
+      <p className={`text-lg font-800 ${toneClass}`}>{value}</p>
+    </button>
   )
 }
 
@@ -501,13 +619,42 @@ function CustomerInfoRow({ label, value }: { label: string; value: string | numb
   )
 }
 
+function OrderDeliveryFlags({ order, customer }: { order: Order; customer: Commerce | null }) {
+  const flags = [
+    !order.dispatch_date ? 'Sin fecha' : '',
+    !order.delivery_slot && !order.delivery_slot_name ? 'Sin franja' : '',
+    !((customer?.latitude && customer?.longitude) || (order.delivery_latitude && order.delivery_longitude)) ? 'Sin coordenadas' : '',
+    customer?.delivery_notes ? 'Con notas' : '',
+  ].filter(Boolean)
+
+  if (flags.length === 0) return null
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {flags.map((flag) => (
+        <span key={flag} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-800 text-amber-900">
+          {flag}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function OrderItemsList({ order }: { order: Order }) {
   if (order.items.length === 0) {
     return <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-700 text-slate-500">Sin articulos cargados.</p>
   }
+  const previewItems = order.items.slice(0, 2)
+  const remainingItems = order.items.length - previewItems.length
+  const totalQuantity = order.items.reduce((total, item) => total + Number(item.quantity ?? 0), 0)
+
   return (
     <div className="grid gap-2">
-      {order.items.map((item) => (
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-800 text-slate-500">
+        <span>{order.items.length} articulos</span>
+        <span>{formatQuantity(totalQuantity)} unidades</span>
+      </div>
+      {previewItems.map((item) => (
         <div key={item.id} className="grid gap-1 rounded-md bg-slate-50 px-3 py-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <p className="font-800 text-slate-950">{item.product_name}</p>
@@ -518,6 +665,11 @@ function OrderItemsList({ order }: { order: Order }) {
           </p>
         </div>
       ))}
+      {remainingItems > 0 ? (
+        <p className="rounded-md border border-slate-200 px-3 py-2 text-xs font-800 text-slate-500">
+          +{remainingItems} articulos mas. Abre el pedido para ver el detalle completo.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -549,6 +701,7 @@ function OrderDecisionControls({
 }) {
   const canDecide = order.status === 'PENDING'
   const canAdjust = ['ACCEPTED', 'PREPARING'].includes(order.status)
+  const hasReadySchedule = Boolean(order.dispatch_date && order.delivery_slot)
   const controlsDisabled = saving || activeSlots.length === 0
 
   if (!canDecide && !canAdjust) {
@@ -558,8 +711,13 @@ function OrderDecisionControls({
   return (
     <div className="grid gap-2">
       <div className="flex flex-wrap gap-2">
+        {canDecide && hasReadySchedule && !active ? (
+          <button className="min-h-11 rounded-md bg-brand-600 px-4 text-sm font-800 text-white disabled:opacity-60" type="button" disabled={saving} onClick={onAccept}>
+            Aceptar para {formatOrderDate(order.dispatch_date)}
+          </button>
+        ) : null}
         <button className="min-h-11 rounded-md bg-slate-950 px-4 text-sm font-800 text-white disabled:opacity-60" type="button" disabled={activeSlots.length === 0} onClick={onOpen}>
-          {active ? 'Cerrar' : canDecide ? 'Aceptar pedido' : 'Ajustar entrega'}
+          {active ? 'Cerrar' : canDecide && hasReadySchedule ? 'Cambiar entrega' : canDecide ? 'Aceptar pedido' : 'Ajustar entrega'}
         </button>
         {canDecide ? (
           <button className="min-h-11 rounded-md border border-red-200 px-4 text-sm font-800 text-red-700 disabled:opacity-60" type="button" disabled={saving} onClick={onReject}>
@@ -579,6 +737,14 @@ function OrderDecisionControls({
               onChange={(event) => onUpdateDraft({ dispatch_date: event.target.value })}
             />
           </label>
+          <div className="flex flex-wrap gap-2">
+            <button className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => onUpdateDraft({ dispatch_date: addDaysIso(0) })}>
+              Hoy
+            </button>
+            <button className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => onUpdateDraft({ dispatch_date: addDaysIso(1) })}>
+              Maniana
+            </button>
+          </div>
           <label className="grid gap-1 text-xs font-800 text-slate-600">
             Franja horaria
             <select
@@ -2103,6 +2269,31 @@ function statusLabel(status: string) {
   return labels[status] ?? status
 }
 
+function statusFilterMatches(status: string, filterId: string) {
+  const filter = orderStatusFilterOptions.find((option) => option.id === filterId)
+  if (!filter || filter.id === 'ALL') return true
+  return filter.statuses.includes(status)
+}
+
+function slotFilterMatches(order: Order, filterId: string) {
+  if (filterId === 'ALL') return true
+  if (filterId === 'NONE') return !order.delivery_slot && !order.delivery_slot_name
+  return order.delivery_slot === Number(filterId)
+}
+
+function countOrdersByStatusFilter(orders: Order[], filterId: string) {
+  return orders.filter((order) => statusFilterMatches(order.status, filterId)).length
+}
+
+function compareOrdersForWork(left: Order, right: Order) {
+  const statusDifference = (orderStatusPriority[left.status] ?? 99) - (orderStatusPriority[right.status] ?? 99)
+  if (statusDifference !== 0) return statusDifference
+  const leftDate = left.dispatch_date || '9999-12-31'
+  const rightDate = right.dispatch_date || '9999-12-31'
+  if (leftDate !== rightDate) return leftDate.localeCompare(rightDate)
+  return Number(right.id) - Number(left.id)
+}
+
 function displayValue(value: string | number | null | undefined) {
   const text = String(value ?? '').trim()
   return text || '-'
@@ -2171,6 +2362,12 @@ function timeValueLabel(value: string | null | undefined) {
 function defaultRouteDate() {
   const base = new Date()
   base.setDate(base.getDate() + 1)
+  return base.toISOString().slice(0, 10)
+}
+
+function addDaysIso(days: number) {
+  const base = new Date()
+  base.setDate(base.getDate() + days)
   return base.toISOString().slice(0, 10)
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { AddressEditor } from '../components/AddressEditor'
@@ -11,6 +11,25 @@ import { useCartStore } from '../stores/cartStore'
 import { useFeedbackStore } from '../stores/feedbackStore'
 import { useOrderStore } from '../stores/orderStore'
 import type { Commerce, Distributor, Order, Product } from '../types/domain'
+
+const customerOrderFilterOptions = [
+  { id: 'ALL', label: 'Todos', statuses: [] },
+  { id: 'OPEN', label: 'En curso', statuses: ['PENDING', 'ACCEPTED', 'PREPARING', 'SCHEDULED', 'ON_THE_WAY'] },
+  { id: 'PENDING', label: 'Pendientes', statuses: ['PENDING'] },
+  { id: 'DELIVERED', label: 'Entregados', statuses: ['DELIVERED'] },
+  { id: 'ISSUES', label: 'Con problema', statuses: ['REJECTED', 'CANCELLED'] },
+]
+
+const customerOrderStatusPriority: Record<string, number> = {
+  ON_THE_WAY: 0,
+  SCHEDULED: 1,
+  ACCEPTED: 2,
+  PREPARING: 3,
+  PENDING: 4,
+  DELIVERED: 5,
+  REJECTED: 6,
+  CANCELLED: 7,
+}
 
 export function HomePage() {
   return <DistributorsDirectory title="Elegi una distribuidora" />
@@ -527,17 +546,96 @@ export function CheckoutPage() {
 export function OrdersPage() {
   const orders = useOrderStore((state) => state.orders)
   const fetchOrders = useOrderStore((state) => state.fetchOrders)
+  const loading = useOrderStore((state) => state.loading)
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [query, setQuery] = useState('')
+
   useEffect(() => {
     void fetchOrders()
   }, [fetchOrders])
+
+  const metrics = useMemo(
+    () =>
+      orders.reduce(
+        (accumulator, order) => {
+          accumulator.total += 1
+          if (customerOrderFilterMatches(order.status, 'OPEN')) accumulator.open += 1
+          if (order.status === 'ON_THE_WAY') accumulator.onTheWay += 1
+          if (order.status === 'DELIVERED') accumulator.delivered += 1
+          if (customerOrderFilterMatches(order.status, 'ISSUES')) accumulator.issues += 1
+          return accumulator
+        },
+        { total: 0, open: 0, onTheWay: 0, delivered: 0, issues: 0 },
+      ),
+    [orders],
+  )
+
+  const visibleOrders = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase()
+    return orders
+      .filter((order) => {
+        if (!customerOrderFilterMatches(order.status, statusFilter)) return false
+        if (!normalizedQuery) return true
+        return [String(order.id), order.distributor_name, order.delivery_address, order.items.map((item) => item.product_name).join(' ')]
+          .filter(Boolean)
+          .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
+      })
+      .sort(compareCustomerOrders)
+  }, [orders, query, statusFilter])
+
   return (
-    <section className="grid gap-4">
-      <h1 className="text-2xl font-800 text-slate-950">Pedidos</h1>
-      {orders.length === 0 ? (
+    <section className="grid gap-5">
+      <div className="grid gap-4 border-b border-slate-200 pb-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div>
+          <h1 className="text-2xl font-800 text-slate-950">Pedidos</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Seguimiento rapido de compras, entregas y pedidos pendientes.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <CustomerOrderMetric active={statusFilter === 'ALL'} label="Total" value={metrics.total} onClick={() => setStatusFilter('ALL')} />
+          <CustomerOrderMetric active={statusFilter === 'OPEN'} label="En curso" value={metrics.open} tone="accent" onClick={() => setStatusFilter('OPEN')} />
+          <CustomerOrderMetric label="En camino" value={metrics.onTheWay} tone="success" onClick={() => setStatusFilter('OPEN')} />
+          <CustomerOrderMetric active={statusFilter === 'DELIVERED'} label="Entregados" value={metrics.delivered} onClick={() => setStatusFilter('DELIVERED')} />
+          <CustomerOrderMetric active={statusFilter === 'ISSUES'} label="Problemas" value={metrics.issues} tone="danger" onClick={() => setStatusFilter('ISSUES')} />
+        </div>
+      </div>
+
+      <section className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+        <div className="flex flex-wrap gap-2">
+          {customerOrderFilterOptions.map((option) => (
+            <button
+              key={option.id}
+              className={`min-h-10 rounded-md border px-3 text-sm font-800 transition ${
+                statusFilter === option.id ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-700'
+              }`}
+              type="button"
+              aria-pressed={statusFilter === option.id}
+              onClick={() => setStatusFilter(option.id)}
+            >
+              {option.label} <span className="text-xs font-800 text-slate-400">{orders.filter((order) => customerOrderFilterMatches(order.status, option.id)).length}</span>
+            </button>
+          ))}
+        </div>
+        <label className="grid gap-1 text-sm font-700 text-slate-700">
+          Buscar pedido
+          <input
+            className="min-h-11 rounded-md border border-slate-300 px-3"
+            type="search"
+            value={query}
+            placeholder="Numero, distribuidora, direccion o producto"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </section>
+
+      {loading ? (
+        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando pedidos...</div>
+      ) : orders.length === 0 ? (
         <EmptyState title="Sin pedidos" text="Tus pedidos van a aparecer aca cuando se confirmen." />
+      ) : visibleOrders.length === 0 ? (
+        <EmptyState title="Sin pedidos con estos filtros" text="Cambia el estado o la busqueda para revisar tus compras." />
       ) : (
         <div className="grid gap-3">
-          {orders.map((order) => (
+          {visibleOrders.map((order) => (
             <OrderRow key={order.id} order={order} />
           ))}
         </div>
@@ -632,6 +730,60 @@ function formatMoney(value: string | number | null | undefined) {
   })}`
 }
 
+function formatQuantity(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount)) return '0'
+  return amount.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+}
+
+function customerOrderFilterMatches(status: string, filterId: string) {
+  const filter = customerOrderFilterOptions.find((option) => option.id === filterId)
+  if (!filter || filter.id === 'ALL') return true
+  return filter.statuses.includes(status)
+}
+
+function compareCustomerOrders(left: Order, right: Order) {
+  const statusDifference = (customerOrderStatusPriority[left.status] ?? 99) - (customerOrderStatusPriority[right.status] ?? 99)
+  if (statusDifference !== 0) return statusDifference
+  const leftDate = left.dispatch_date || '9999-12-31'
+  const rightDate = right.dispatch_date || '9999-12-31'
+  if (leftDate !== rightDate) return leftDate.localeCompare(rightDate)
+  return Number(right.id) - Number(left.id)
+}
+
+function customerOrderStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: 'Pendiente',
+    ACCEPTED: 'Aceptado',
+    PREPARING: 'Preparando',
+    SCHEDULED: 'Programado',
+    ON_THE_WAY: 'En camino',
+    DELIVERED: 'Entregado',
+    REJECTED: 'Rechazado',
+    CANCELLED: 'Cancelado',
+  }
+  return labels[status] ?? status
+}
+
+function customerOrderDateLabel(value: string | null | undefined) {
+  if (!value) return 'Sin fecha'
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString('es-AR')
+}
+
+function customerOrderSlotLabel(order: Order) {
+  if (order.delivery_slot_name) {
+    return [order.delivery_slot_name, customerOrderWindowLabel(order.delivery_slot_start_time, order.delivery_slot_end_time)].filter(Boolean).join(' ')
+  }
+  return customerOrderWindowLabel(order.delivery_window_start, order.delivery_window_end)
+}
+
+function customerOrderWindowLabel(start: string | null | undefined, end: string | null | undefined) {
+  if (!start || !end) return 'Sin franja'
+  return `${String(start).slice(0, 5)}-${String(end).slice(0, 5)}`
+}
+
 function packageLabel(product: Product) {
   const unit = product.unit?.trim() || 'bulto'
   const units = unitsPerPackage(product)
@@ -680,23 +832,100 @@ function OrderSummary() {
   )
 }
 
-function OrderRow({ order }: { order: Order }) {
+function CustomerOrderMetric({
+  label,
+  value,
+  active = false,
+  tone = 'neutral',
+  onClick,
+}: {
+  label: string
+  value: number
+  active?: boolean
+  tone?: 'neutral' | 'accent' | 'success' | 'danger'
+  onClick: () => void
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'text-emerald-700'
+      : tone === 'danger'
+        ? 'text-red-700'
+        : tone === 'accent'
+          ? 'text-brand-700'
+          : 'text-slate-950'
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+    <button
+      className={`min-h-16 rounded-md border bg-white px-3 py-2 text-right transition hover:border-brand-300 hover:bg-brand-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 ${
+        active ? 'border-brand-500 bg-brand-50' : 'border-slate-200'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      <p className="text-[11px] font-800 uppercase text-slate-500">{label}</p>
+      <p className={`text-lg font-800 ${toneClass}`}>{value}</p>
+    </button>
+  )
+}
+
+function OrderRow({ order }: { order: Order }) {
+  const itemPreview = order.items.slice(0, 2)
+  const remainingItems = order.items.length - itemPreview.length
+  const totalQuantity = order.items.reduce((total, item) => total + Number(item.quantity ?? 0), 0)
+  const isTrackable = !['REJECTED', 'CANCELLED'].includes(order.status)
+
+  return (
+    <article className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-soft transition hover:border-brand-200">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-800 text-slate-950">Pedido #{order.id}</h2>
-          <p className="text-sm text-slate-600">{order.commerce_name || order.distributor_name}</p>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-800 text-slate-950">Pedido #{order.id}</h2>
+            <StatusBadge status={order.status} />
+          </div>
+          <p className="mt-1 text-sm font-700 text-slate-700">{order.distributor_name || order.commerce_name}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-slate-500">{order.delivery_address || 'Sin direccion registrada'}</p>
         </div>
-        <StatusBadge status={order.status} />
+        <div className="text-right">
+          <p className="text-xs font-800 uppercase text-slate-500">Total</p>
+          <p className="text-lg font-800 text-slate-950">{formatMoney(order.total)}</p>
+        </div>
       </div>
-      <p className="mt-3 text-sm text-slate-600">
-        {order.items.length} productos · {formatMoney(order.total)}
-      </p>
-      <p className="mt-1 text-sm text-slate-500">Reparto {new Date(`${order.dispatch_date}T00:00:00`).toLocaleDateString('es-AR')}</p>
-      <Link className="mt-4 inline-flex min-h-11 items-center rounded-md border border-brand-200 px-4 font-800 text-brand-700" to={`/tracking/${order.id}`}>
-        Ver seguimiento
-      </Link>
+
+      <div className="grid gap-3 rounded-md bg-slate-50 p-3 md:grid-cols-3">
+        <Info label="Entrega" value={customerOrderDateLabel(order.dispatch_date)} />
+        <Info label="Franja" value={customerOrderSlotLabel(order)} />
+        <Info label="Estado" value={customerOrderStatusLabel(order.status)} />
+      </div>
+
+      <div className="grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-800 text-slate-500">
+          <span>{order.items.length} productos</span>
+          <span>{formatQuantity(totalQuantity)} unidades</span>
+        </div>
+        {itemPreview.length === 0 ? (
+          <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm font-700 text-slate-500">Sin detalle de productos.</p>
+        ) : (
+          itemPreview.map((item) => (
+            <div key={item.id} className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+              <span className="font-800 text-slate-800">{item.product_name}</span>
+              <span className="font-700 text-slate-500">
+                {formatQuantity(item.quantity)} u. - {formatMoney(item.subtotal)}
+              </span>
+            </div>
+          ))
+        )}
+        {remainingItems > 0 ? <p className="text-xs font-800 text-slate-500">+{remainingItems} productos mas en este pedido.</p> : null}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {isTrackable ? (
+          <Link className="inline-flex min-h-11 items-center rounded-md bg-brand-600 px-4 font-800 text-white" to={`/tracking/${order.id}`}>
+            Ver seguimiento
+          </Link>
+        ) : null}
+        <Link className="inline-flex min-h-11 items-center rounded-md border border-slate-300 px-4 font-800 text-slate-700" to={`/distributors/${order.distributor}`}>
+          Ver catalogo
+        </Link>
+      </div>
     </article>
   )
 }
