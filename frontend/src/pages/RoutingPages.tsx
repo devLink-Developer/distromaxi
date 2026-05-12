@@ -268,11 +268,12 @@ export function DashboardOrdersRoutingPage() {
 
   return (
     <section className="grid gap-5">
-      <div className="grid gap-4 border-b border-slate-200 pb-5 xl:grid-cols-[1fr_auto] xl:items-end">
+      <div className="grid gap-4 border-b border-slate-200 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
         <div className="max-w-3xl">
-          <h1 className="text-2xl font-800 text-slate-950">Pedidos</h1>
+          <p className="text-xs font-800 uppercase tracking-[0.14em] text-brand-700">Distribuidora</p>
+          <h1 className="mt-1 text-2xl font-800 text-slate-950">Pedidos de distribuidora</h1>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            Bandeja de trabajo para aceptar, rechazar y coordinar entregas sin salir de la lista.
+            Cola operativa para aceptar, rechazar y coordinar entregas sin salir de la pantalla.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -376,111 +377,32 @@ export function DashboardOrdersRoutingPage() {
       ) : visibleOrders.length === 0 ? (
         <EmptyState title="Sin pedidos con estos filtros" text="Ajusta estado, fecha o busqueda para revisar la gestion comercial." />
       ) : (
-        <>
-          <section className="hidden overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft lg:block">
-            <table className="w-full table-fixed border-collapse text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-800 uppercase text-slate-500">
-                <tr>
-                  <th className="w-[13rem] px-4 py-3">Pedido</th>
-                  <th className="px-4 py-3">Articulos</th>
-                  <th className="w-[13rem] px-4 py-3">Entrega</th>
-                  <th className="w-[9rem] px-4 py-3">Total</th>
-                  <th className="w-[18rem] px-4 py-3">Gestion</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {visibleOrders.map((order) => (
-                  <tr key={order.id} className="align-top transition hover:bg-slate-50/70">
-                    <td className="px-4 py-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-800 text-slate-950">#{order.id}</p>
-                          <button
-                            className="mt-1 line-clamp-2 text-left font-700 text-slate-700 underline decoration-slate-300 underline-offset-4 transition hover:text-brand-700 hover:decoration-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-                            type="button"
-                            onClick={() => setSelectedCustomerOrder(order)}
-                            aria-label={`Ver datos del cliente ${order.commerce_name}`}
-                          >
-                            {order.commerce_name}
-                          </button>
-                        </div>
-                        <StatusBadge status={order.status} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <OrderItemsList order={order} />
-                    </td>
-                    <td className="px-4 py-4">
-                      <p className="font-800 text-slate-950">{formatOrderDate(order.dispatch_date)}</p>
-                      <p className="mt-1 text-slate-600">{deliverySlotSummary(order)}</p>
-                      <OrderDeliveryFlags customer={commerceById.get(order.commerce) ?? null} order={order} />
-                      <p className="mt-1 line-clamp-2 text-xs font-700 text-slate-500">{order.delivery_address}</p>
-                    </td>
-                    <td className="px-4 py-4 font-800 text-slate-950">{formatMoney(order.total)}</td>
-                    <td className="px-4 py-4">
-                      <OrderDecisionControls
-                        active={activeOrderId === order.id}
-                        activeSlots={activeSlots}
-                        draft={drafts[order.id]}
-                        error={activeOrderId === order.id ? actionError : null}
-                        order={order}
-                        saving={savingOrderId === order.id}
-                        onAccept={() => void acceptOrder(order)}
-                        onOpen={() => openSchedule(order)}
-                        onReject={() => void rejectOrder(order)}
-                        onSaveSchedule={() => void saveSchedule(order)}
-                        onUpdateDraft={(patch) => updateDraft(order.id, patch)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section className="grid gap-3 lg:hidden">
-            {visibleOrders.map((order) => (
-              <article key={order.id} className="grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-800 text-slate-950">Pedido #{order.id}</h2>
-                    <button
-                      className="mt-1 text-left text-sm font-700 text-slate-700 underline decoration-slate-300 underline-offset-4 transition hover:text-brand-700 hover:decoration-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-                      type="button"
-                      onClick={() => setSelectedCustomerOrder(order)}
-                      aria-label={`Ver datos del cliente ${order.commerce_name}`}
-                    >
-                      {order.commerce_name}
-                    </button>
-                  </div>
-                  <StatusBadge status={order.status} />
-                </div>
-                <div className="grid gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-                  <p className="font-800 text-slate-950">{formatMoney(order.total)}</p>
-                  <p className="text-slate-600">
-                    {formatOrderDate(order.dispatch_date)} - {deliverySlotSummary(order)}
-                  </p>
-                  <OrderDeliveryFlags customer={commerceById.get(order.commerce) ?? null} order={order} />
-                  <p className="line-clamp-2 text-xs font-700 text-slate-500">{order.delivery_address}</p>
-                </div>
-                <OrderDecisionControls
-                  active={activeOrderId === order.id}
-                  activeSlots={activeSlots}
-                  draft={drafts[order.id]}
-                  error={activeOrderId === order.id ? actionError : null}
-                  order={order}
-                  saving={savingOrderId === order.id}
-                  onAccept={() => void acceptOrder(order)}
-                  onOpen={() => openSchedule(order)}
-                  onReject={() => void rejectOrder(order)}
-                  onSaveSchedule={() => void saveSchedule(order)}
-                  onUpdateDraft={(patch) => updateDraft(order.id, patch)}
-                />
-                <OrderItemsList order={order} />
-              </article>
-            ))}
-          </section>
-        </>
+        <section className="grid gap-3">
+          <div className="hidden rounded-lg border border-slate-200 bg-slate-900 px-4 py-3 text-xs font-800 uppercase tracking-[0.08em] text-slate-300 shadow-soft lg:grid lg:grid-cols-[minmax(12rem,0.9fr)_minmax(16rem,1.25fr)_minmax(13rem,0.9fr)_minmax(17rem,1.1fr)] lg:gap-4">
+            <span>Pedido y cliente</span>
+            <span>Articulos</span>
+            <span>Entrega y total</span>
+            <span>Gestion</span>
+          </div>
+          {visibleOrders.map((order) => (
+            <OrderWorkRow
+              key={order.id}
+              active={activeOrderId === order.id}
+              activeSlots={activeSlots}
+              customer={commerceById.get(order.commerce) ?? null}
+              draft={drafts[order.id]}
+              error={activeOrderId === order.id ? actionError : null}
+              order={order}
+              saving={savingOrderId === order.id}
+              onAccept={() => void acceptOrder(order)}
+              onCustomerClick={() => setSelectedCustomerOrder(order)}
+              onOpen={() => openSchedule(order)}
+              onReject={() => void rejectOrder(order)}
+              onSaveSchedule={() => void saveSchedule(order)}
+              onUpdateDraft={(patch) => updateDraft(order.id, patch)}
+            />
+          ))}
+        </section>
       )}
       {selectedCustomerOrder ? (
         <CustomerSummaryModal
@@ -490,6 +412,98 @@ export function DashboardOrdersRoutingPage() {
         />
       ) : null}
     </section>
+  )
+}
+
+function OrderWorkRow({
+  order,
+  customer,
+  active,
+  draft,
+  activeSlots,
+  saving,
+  error,
+  onCustomerClick,
+  onOpen,
+  onUpdateDraft,
+  onAccept,
+  onReject,
+  onSaveSchedule,
+}: {
+  order: Order
+  customer: Commerce | null
+  active: boolean
+  draft: OrderScheduleDraft | undefined
+  activeSlots: DistributorDeliverySlot[]
+  saving: boolean
+  error: string | null
+  onCustomerClick: () => void
+  onOpen: () => void
+  onUpdateDraft: (patch: Partial<OrderScheduleDraft>) => void
+  onAccept: () => void
+  onReject: () => void
+  onSaveSchedule: () => void
+}) {
+  return (
+    <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft transition hover:border-brand-300">
+      <div className="grid gap-4 lg:grid-cols-[minmax(12rem,0.9fr)_minmax(16rem,1.25fr)_minmax(13rem,0.9fr)_minmax(17rem,1.1fr)] lg:items-start">
+        <section className="min-w-0">
+          <div className="flex items-start justify-between gap-3 lg:block">
+            <div className="min-w-0">
+              <p className="text-xs font-800 uppercase text-slate-500">Pedido #{order.id}</p>
+              <button
+                className="mt-1 line-clamp-2 text-left text-lg font-800 text-slate-950 underline decoration-slate-300 underline-offset-4 transition hover:text-brand-700 hover:decoration-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                type="button"
+                onClick={onCustomerClick}
+                aria-label={`Ver datos del cliente ${order.commerce_name}`}
+              >
+                {order.commerce_name}
+              </button>
+            </div>
+            <div className="shrink-0 lg:mt-3">
+              <StatusBadge status={order.status} />
+            </div>
+          </div>
+          <p className="mt-3 line-clamp-2 text-sm font-700 leading-6 text-slate-500">{order.delivery_address}</p>
+          <OrderDeliveryFlags customer={customer} order={order} />
+        </section>
+
+        <section className="min-w-0 border-t border-slate-100 pt-3 lg:border-t-0 lg:pt-0">
+          <p className="mb-2 text-xs font-800 uppercase text-slate-500 lg:hidden">Articulos</p>
+          <OrderItemsList order={order} />
+        </section>
+
+        <section className="grid gap-2 border-t border-slate-100 pt-3 text-sm lg:border-t-0 lg:pt-0">
+          <p className="text-xs font-800 uppercase text-slate-500 lg:hidden">Entrega y total</p>
+          <div className="rounded-md bg-slate-50 px-3 py-2">
+            <p className="text-[11px] font-800 uppercase text-slate-500">Entrega</p>
+            <p className="mt-1 font-800 text-slate-950">{formatOrderDate(order.dispatch_date)}</p>
+            <p className="mt-1 text-slate-600">{deliverySlotSummary(order)}</p>
+          </div>
+          <div className="rounded-md bg-brand-50 px-3 py-2">
+            <p className="text-[11px] font-800 uppercase text-brand-700">Total</p>
+            <p className="mt-1 text-lg font-800 text-slate-950">{formatMoney(order.total)}</p>
+          </div>
+        </section>
+
+        <section className="border-t border-slate-100 pt-3 lg:border-t-0 lg:pt-0">
+          <p className="mb-2 text-xs font-800 uppercase text-slate-500 lg:hidden">Gestion</p>
+          <OrderDecisionControls
+            active={active}
+            activeSlots={activeSlots}
+            draft={draft}
+            error={error}
+            order={order}
+            saving={saving}
+            onAccept={onAccept}
+            onOpen={onOpen}
+            onReject={onReject}
+            onSaveSchedule={onSaveSchedule}
+            onUpdateDraft={onUpdateDraft}
+          />
+        </section>
+      </div>
+    </article>
   )
 }
 

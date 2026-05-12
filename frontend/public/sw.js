@@ -1,4 +1,4 @@
-const CACHE_NAME = 'distromax-v2'
+const CACHE_NAME = 'distromax-v3'
 const OFFLINE_URL = '/offline.html'
 const ASSETS = ['/', OFFLINE_URL, '/manifest.webmanifest', '/pwa-icon.svg', '/pwa-icon-192.png', '/pwa-icon-512.png']
 
