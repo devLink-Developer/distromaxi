@@ -272,9 +272,6 @@ export function DashboardOrdersRoutingPage() {
         <div className="max-w-3xl">
           <p className="text-xs font-800 uppercase tracking-[0.14em] text-brand-700">Distribuidora</p>
           <h1 className="mt-1 text-2xl font-800 text-slate-950">Pedidos de distribuidora</h1>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
-            Cola operativa para aceptar, rechazar y coordinar entregas sin salir de la pantalla.
-          </p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <OrderMetric active={statusFilter === 'ALL'} label="Total" value={metrics.total} onClick={() => setStatusFilter('ALL')} />
@@ -367,7 +364,7 @@ export function DashboardOrdersRoutingPage() {
         </div>
         {activeSlots.length === 0 ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-700 text-amber-900">
-            No hay franjas activas. Configuralas en Franjas para poder aceptar pedidos con agenda.
+            Sin franjas activas.
           </p>
         ) : null}
       </section>
@@ -375,7 +372,7 @@ export function DashboardOrdersRoutingPage() {
       {loading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando pedidos...</div>
       ) : visibleOrders.length === 0 ? (
-        <EmptyState title="Sin pedidos con estos filtros" text="Ajusta estado, fecha o busqueda para revisar la gestion comercial." />
+        <EmptyState title="Sin pedidos" />
       ) : (
         <section className="grid gap-3">
           <div className="hidden rounded-lg border border-slate-200 bg-slate-900 px-4 py-3 text-xs font-800 uppercase tracking-[0.08em] text-slate-300 shadow-soft lg:grid lg:grid-cols-[minmax(12rem,0.9fr)_minmax(16rem,1.25fr)_minmax(13rem,0.9fr)_minmax(17rem,1.1fr)] lg:gap-4">
@@ -566,7 +563,6 @@ function CustomerSummaryModal({ order, customer, onClose }: { order: Order; cust
             <h2 id="customer-summary-title" className="mt-1 break-words text-xl font-800 text-slate-950">
               {title}
             </h2>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Resumen asociado al pedido #{order.id}</p>
           </div>
           <button
             ref={closeButtonRef}
@@ -681,7 +677,7 @@ function OrderItemsList({ order }: { order: Order }) {
       ))}
       {remainingItems > 0 ? (
         <p className="rounded-md border border-slate-200 px-3 py-2 text-xs font-800 text-slate-500">
-          +{remainingItems} articulos mas. Abre el pedido para ver el detalle completo.
+          +{remainingItems} articulos mas.
         </p>
       ) : null}
     </div>
@@ -824,7 +820,6 @@ export function DashboardRoutingPage() {
     () => deliverySlots.filter((slot) => slot.active).sort((left, right) => left.sort_order - right.sort_order || left.start_time.localeCompare(right.start_time)),
     [deliverySlots],
   )
-  const selectedDeliverySlot = useMemo(() => activeDeliverySlots.find((slot) => slot.id === selectedDeliverySlotId) ?? null, [activeDeliverySlots, selectedDeliverySlotId])
   const availableDrivers = useMemo(() => drivers.filter((driver) => driver.active && driver.available), [drivers])
   const selectableVehicles = useMemo(() => vehicles.filter(isVehicleSelectable), [vehicles])
   const selectableVehicleIdSet = useMemo(() => new Set(selectableVehicles.map((vehicle) => vehicle.id)), [selectableVehicles])
@@ -1254,10 +1249,9 @@ export function DashboardRoutingPage() {
       <section className="grid gap-4">
         <div>
           <h1 className="text-2xl font-800 text-slate-950">Ruteo</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Organizacion de recorridos para distribuidoras activas.</p>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm font-700 text-amber-900">
-          Tu cuenta todavia no tiene ruteo habilitado. Cuando la distribuidora este activa vas a poder crear rutas manuales.
+          Ruteo no habilitado.
         </div>
       </section>
     )
@@ -1268,10 +1262,6 @@ export function DashboardRoutingPage() {
       <div className="grid gap-4 border-b border-slate-200 pb-5 lg:grid-cols-[1fr_auto] lg:items-end">
         <div className="max-w-3xl">
           <h1 className="text-2xl font-800 text-slate-950">Ruteo de entregas</h1>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
-            Arma rutas manuales arrastrando pedidos a vehiculos. El ruteo automatico queda disponible solo para el plan Pro.
-          </p>
-          {selectedDeliverySlot ? <p className="mt-2 text-xs font-800 uppercase text-brand-700">Franja activa: {deliverySlotLabel(selectedDeliverySlot)}</p> : null}
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="grid gap-1 text-sm font-700 text-slate-700">
@@ -1317,12 +1307,10 @@ export function DashboardRoutingPage() {
 
       {activeDeliverySlots.length === 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm font-700 text-amber-900">
-          No hay franjas activas para rutear. Configura al menos una franja en Franjas.
+          Sin franjas activas.
         </div>
       ) : !selectedDeliverySlotId ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600 shadow-soft">
-          Selecciona fecha de entrega y franja horaria para cargar pedidos aceptados y rutas de esa ventana.
-        </div>
+        null
       ) : loading ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-700 text-slate-600">Cargando rutas...</div>
       ) : (
@@ -1373,7 +1361,7 @@ export function DashboardRoutingPage() {
             onToggleAutoOrder={toggleOrder}
           />
 
-          {routePlans.length === 0 ? <EmptyState title="Sin borradores para esta fecha" text="Arrastra pedidos a los vehiculos para crear una ruta manual o usa la generacion automatica si tu plan lo incluye." /> : null}
+          {routePlans.length === 0 ? <EmptyState title="Sin rutas" /> : null}
 
           {routePlans.map((plan) => {
             const editable = editingPlanId === plan.id
@@ -1395,7 +1383,7 @@ export function DashboardRoutingPage() {
 
                 {editable && (
                   <p className="rounded-md border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-700 text-brand-700">
-                    Modo edicion activo. Reordena paradas, ajusta marcadores en el mapa o quita paradas antes de guardar.
+                    Modo edicion.
                   </p>
                 )}
 

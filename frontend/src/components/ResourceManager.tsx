@@ -46,7 +46,6 @@ type FormSection = {
 
 export function ResourceManager({
   title,
-  description,
   endpoint,
   fields,
   columns,
@@ -64,7 +63,7 @@ export function ResourceManager({
   emptyText,
 }: {
   title: string
-  description: string
+  description?: string
   endpoint: string
   fields: FieldConfig[]
   columns: ColumnConfig[]
@@ -93,7 +92,6 @@ export function ResourceManager({
   const searchInputId = useId()
   const resultStatusId = useId()
   const formTitleId = useId()
-  const formDescriptionId = useId()
   const showSuccess = useFeedbackStore((state) => state.success)
   const showError = useFeedbackStore((state) => state.error)
   const confirm = useFeedbackStore((state) => state.confirm)
@@ -244,7 +242,6 @@ export function ResourceManager({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-800 text-slate-950">{title}</h1>
-            {description && <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">{description}</p>}
           </div>
           {allowCreate && (
             <button
@@ -344,9 +341,9 @@ export function ResourceManager({
       {loading ? (
         <LoadingState />
       ) : errorMessage && !hasRows ? null : !hasRows ? (
-        <EmptyState title={emptyTitle} text={emptyText ?? (allowCreate ? `Usa el boton ${createLabel} para cargar el primero.` : 'Cuando haya datos disponibles, van a aparecer aca.')} />
+        <EmptyState title={emptyTitle} text={emptyText} />
       ) : isFiltered && !hasFilteredRows ? (
-        <EmptyState title="Sin resultados" text="Ajusta la busqueda o limpia el filtro para volver al listado completo." />
+        <EmptyState title="Sin resultados" />
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
           <div className="hidden overflow-x-auto md:block">
@@ -403,7 +400,6 @@ export function ResourceManager({
           role="dialog"
           aria-modal="true"
           aria-labelledby={formTitleId}
-          aria-describedby={formDescriptionId}
         >
           <div className="max-h-dvh w-full overflow-y-auto rounded-t-lg bg-white p-4 shadow-soft sm:max-h-[92dvh] sm:max-w-3xl sm:rounded-lg sm:p-5">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -411,9 +407,6 @@ export function ResourceManager({
                 <h2 id={formTitleId} className="text-xl font-800 text-slate-950">
                   {editing ? `Editar ${title.toLowerCase()}` : `Agregar ${title.toLowerCase()}`}
                 </h2>
-                <p id={formDescriptionId} className="mt-1 text-sm leading-6 text-slate-600">
-                  Completa los campos requeridos y guarda los cambios.
-                </p>
               </div>
               <button
                 className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-slate-300 px-3 text-sm font-800 text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
@@ -433,7 +426,6 @@ export function ResourceManager({
                 return (
                   <fieldset key={section.title} className="rounded-lg border border-slate-200 p-3">
                     <legend className="px-1 text-sm font-800 text-slate-950">{section.title}</legend>
-                    {section.description && <p className="mb-3 text-xs leading-5 text-slate-500">{section.description}</p>}
                     <div className="grid gap-3 md:grid-cols-2">
                       {sectionFields.map((field) => (
                         <ResourceField key={`${field.name}-${String(initialValues[field.name])}`} field={field} value={initialValues[field.name]} />

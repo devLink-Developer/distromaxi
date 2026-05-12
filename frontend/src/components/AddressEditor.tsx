@@ -29,7 +29,7 @@ export function AddressEditor({
   onSave,
 }: {
   title: string
-  description: string
+  description?: string
   notesLabel: string
   saveLabel: string
   initialValue: AddressEditorValue
@@ -271,7 +271,7 @@ export function AddressEditor({
       <div className="grid gap-2">
         <p className="text-sm font-800 uppercase tracking-[0.14em] text-brand-700">Direccion</p>
         <h2 className="text-2xl font-800 text-slate-950">{title}</h2>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
+        {description ? <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p> : null}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start 2xl:grid-cols-[minmax(0,1fr)_21rem]">
@@ -384,8 +384,6 @@ export function AddressEditor({
               </label>
             </div>
 
-            <p className="text-sm leading-6 text-slate-600">Se ubica sola cuando completas calle y altura.</p>
-
             <label className="grid min-w-0 gap-1 text-sm font-700 text-slate-700">
               {notesLabel}
               <textarea
@@ -400,9 +398,7 @@ export function AddressEditor({
           <div className="flex flex-col gap-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
             <div className="grid gap-1">
               <p className="text-sm font-800 text-slate-950">{statusTitle(geocodeStatus)}</p>
-              <p className="text-sm leading-6 text-slate-600">
-                {summaryAddress || 'Completa la direccion para ubicarla.'}
-              </p>
+              {summaryAddress ? <p className="text-sm leading-6 text-slate-600">{summaryAddress}</p> : null}
             </div>
             <button
               className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -428,9 +424,11 @@ export function AddressEditor({
             <AddressMap position={mapPosition} disabled={geoLoading || reverseLoading} onMove={(point) => void reverseFromMap(point)} />
           </div>
 
-          <div className="rounded-[1.15rem] border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-200">
-            {summaryAddress || 'Completa la direccion para verla en el mapa.'}
-          </div>
+          {summaryAddress ? (
+            <div className="rounded-[1.15rem] border border-white/10 bg-white/5 px-4 py-3 text-sm leading-6 text-slate-200">
+              {summaryAddress}
+            </div>
+          ) : null}
 
           <button
             className="min-h-11 rounded-full bg-white px-5 text-sm font-800 text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -512,9 +510,9 @@ function statusTitle(status: GeocodeStatus) {
     case 'reverse':
       return 'Actualizando desde el mapa'
     case 'stale':
-      return 'Falta volver a ubicar'
+      return 'Pendiente'
     default:
-      return 'Completa la direccion'
+      return 'Sin validar'
   }
 }
 

@@ -651,7 +651,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/edita los planes que se muestran/i)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^planes$/i })).toBeInTheDocument()
 
     await userEvent.click(screen.getAllByRole('button', { name: /editar/i })[0])
     const urlInput = screen.getByLabelText(/enlace de pago/i)
@@ -922,7 +922,7 @@ describe('DistroMaxi frontend flows', () => {
     expect(await screen.findByText(/stock inteligente/i)).toBeInTheDocument()
     expect((await screen.findAllByText('Gaseosa cola x 12')).length).toBeGreaterThan(0)
     expect(screen.getByText('Aceite girasol x 6')).toBeInTheDocument()
-    expect(screen.getByText(/Disponible por debajo del minimo configurado/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Disponible por debajo del minimo configurado/i)).not.toBeInTheDocument()
     expect(screen.getByText(/12 unidades/i)).toBeInTheDocument()
 
     await userEvent.selectOptions(screen.getByLabelText(/urgencia/i), 'critical')

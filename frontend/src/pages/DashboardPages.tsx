@@ -78,27 +78,22 @@ const productQuickFilters = [
 const productFormSections = [
   {
     title: 'Identidad',
-    description: 'Datos visibles para encontrar el producto y evitar SKU duplicados.',
     fields: ['sku', 'name', 'brand', 'barcode', 'active'],
   },
   {
     title: 'Clasificacion',
-    description: 'Proveedor, categoria y subcategoria usados por la tienda y los filtros.',
     fields: ['supplier', 'product_category', 'product_subcategory', 'unit', 'package_size'],
   },
   {
     title: 'Comercial',
-    description: 'Precio, costo y descuento vigente para venta mayorista.',
     fields: ['price', 'cost', 'discount_percent', 'discount_name', 'stock_minimum', 'stock_target', 'replenishment_multiple'],
   },
   {
     title: 'Logistica',
-    description: 'Medidas necesarias para stock, bultos, palletizado y ruteo.',
     fields: ['units_per_package', 'packages_per_pallet', 'units_per_pallet', 'length', 'width', 'height', 'dimension_unit', 'weight', 'weight_unit'],
   },
   {
     title: 'Contenido',
-    description: 'Informacion que mejora la lectura del catalogo por parte del cliente.',
     fields: ['image_url', 'characteristics', 'description'],
   },
 ]
@@ -336,9 +331,6 @@ export function ProductsManagerPage() {
         <div className="max-w-3xl">
           <p className="text-[11px] font-800 uppercase text-brand-700">Catalogo</p>
           <h1 className="mt-1 text-2xl font-800 text-slate-950">Productos de distribuidora</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Carga articulos, precios y medidas con los datos auxiliares visibles en la misma pantalla.
-          </p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:min-w-[34rem]">
           <CatalogStat label="Proveedores" value={optionsLoading ? '...' : activeTotal(suppliers)} />
@@ -352,7 +344,6 @@ export function ProductsManagerPage() {
       <div className={resourceManagerDensityClass}>
         <ResourceManager
           title="Productos"
-          description="Listado compacto para revisar lo que se vende, editar datos comerciales y mantener stock visible."
           endpoint="products"
           createLabel="Agregar producto"
           allowCreate={!optionsLoading && !needsSuppliers && !needsCategories}
@@ -365,7 +356,6 @@ export function ProductsManagerPage() {
           mobileColumns={['name', 'sku', 'price', 'stock_available', 'active']}
           formSections={productFormSections}
           emptyTitle="Todavia no hay productos"
-          emptyText="Carga proveedores y categorias activas, despues agrega el primer producto del catalogo."
           columns={[
             { key: 'sku', label: 'Codigo' },
             { key: 'name', label: 'Producto' },
@@ -383,9 +373,6 @@ export function ProductsManagerPage() {
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-base font-800 text-slate-950">Datos auxiliares</h2>
-            <p className="text-[13px] leading-5 text-slate-600">
-              Mantiene activos los proveedores y categorias que aparecen en el formulario de productos.
-            </p>
           </div>
           <span className="w-fit rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-800 uppercase text-slate-500">
             {optionsLoading ? 'Cargando opciones' : `${activeReferences}/${totalReferences} activas`}
@@ -396,7 +383,6 @@ export function ProductsManagerPage() {
           <div className={resourceManagerDensityClass}>
             <ResourceManager
               title="Proveedores"
-              description="Asocia cada articulo a su origen comercial."
               endpoint="product-suppliers"
               createLabel="Agregar proveedor"
               onSaved={refreshOptions}
@@ -419,7 +405,6 @@ export function ProductsManagerPage() {
           <div className={resourceManagerDensityClass}>
             <ResourceManager
               title="Categorias"
-              description="Ordena el catalogo principal."
               endpoint="product-categories"
               createLabel="Agregar categoria"
               onSaved={refreshOptions}
@@ -436,7 +421,6 @@ export function ProductsManagerPage() {
           <div className={`${resourceManagerDensityClass} lg:col-span-2 2xl:col-span-1`}>
             <ResourceManager
               title="Sub categorias"
-              description="Detalla agrupaciones dentro de cada categoria."
               endpoint="product-subcategories"
               createLabel="Agregar sub categoria"
               onSaved={refreshOptions}
@@ -500,13 +484,12 @@ function CatalogSetupNotice({
 
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] leading-5 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
-      <p className="font-800">Faltan datos auxiliares activos para crear productos.</p>
-      <p>
+      <p className="font-800">
         {needsSuppliers && needsCategories
-          ? 'Carga al menos un proveedor y una categoria.'
+          ? 'Faltan proveedores y categorias.'
           : needsSuppliers
-            ? 'Carga al menos un proveedor.'
-            : 'Carga al menos una categoria.'}
+            ? 'Faltan proveedores.'
+            : 'Faltan categorias.'}
       </p>
     </div>
   )
@@ -570,7 +553,6 @@ function productManagerFields(
       type: 'select',
       required: true,
       options: supplierOptions,
-      helperText: supplierOptions.length === 0 ? 'Crea un proveedor activo en datos auxiliares.' : undefined,
     },
     {
       name: 'product_category',
@@ -578,7 +560,6 @@ function productManagerFields(
       type: 'select',
       required: true,
       options: categoryOptions,
-      helperText: categoryOptions.length === 0 ? 'Crea una categoria activa en datos auxiliares.' : undefined,
     },
     { name: 'product_subcategory', label: 'Sub categoria', type: 'select', options: subcategoryOptions },
     { name: 'unit', label: 'Unidad de medida', required: true },
@@ -630,7 +611,6 @@ export function CustomersManagerPage() {
   return (
     <ResourceManager
       title="Clientes"
-      description="Administra los comercios clientes."
       endpoint="commerces"
       fields={[
         { name: 'trade_name', label: 'Nombre comercial', required: true },
@@ -666,7 +646,6 @@ export function DeliverySlotsManagerPage() {
   return (
     <ResourceManager
       title="Franjas de entrega"
-      description="Configura las ventanas horarias que usa tu equipo para aceptar pedidos y armar rutas."
       endpoint="delivery-slots"
       createLabel="Agregar franja"
       fields={[
@@ -692,7 +671,6 @@ export function DeliverySlotsManagerPage() {
         ]
       }}
       emptyTitle="Todavia no hay franjas"
-      emptyText="Crea al menos una franja para poder aceptar pedidos y rutear por ventana horaria."
     />
   )
 }
@@ -701,7 +679,6 @@ export function VehiclesManagerPage() {
   return (
     <ResourceManager
       title="Vehiculos"
-      description="Administra la flota de reparto."
       endpoint="vehicles"
       fields={[
         { name: 'plate', label: 'Patente', required: true },
@@ -729,7 +706,6 @@ export function DriversManagerPage() {
   return (
     <ResourceManager
       title="Choferes"
-      description="Administra choferes y disponibilidad."
       endpoint="drivers"
       fields={[
         { name: 'email', label: 'Email', type: 'email', required: true },
@@ -871,9 +847,6 @@ export function StockPage() {
         <div className="max-w-3xl">
           <p className="text-[11px] font-800 uppercase text-brand-700">Inventario</p>
           <h1 className="mt-1 text-2xl font-800 text-slate-950">Stock inteligente</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Prioriza reposicion, quiebres, reservas y conteos fisicos desde la misma vista operativa.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -946,15 +919,12 @@ export function StockPage() {
         <div className="rounded-lg border border-slate-200 bg-white shadow-soft">
           <div className="border-b border-slate-200 px-4 py-3">
             <h2 className="text-base font-800 text-slate-950">Reposicion sugerida</h2>
-            <p className="mt-1 text-[13px] leading-5 text-slate-600">
-              Compra recomendada por cobertura, minimo, objetivo y reservas.
-            </p>
           </div>
           <div className="grid gap-2 p-3">
             {loading && !summary ? (
               <p className="p-3 text-[13px] font-800 text-slate-500">Cargando sugerencias...</p>
             ) : filteredSuggestions.length === 0 ? (
-              <EmptyState title="Sin sugerencias para el filtro" text="No hay SKUs con reposicion pendiente en esta seleccion." />
+              <EmptyState title="Sin sugerencias" />
             ) : (
               filteredSuggestions.map((row) => (
                 <article key={row.stock_item_id} className="rounded-lg border border-slate-200 p-3">
@@ -971,7 +941,6 @@ export function StockPage() {
                     <StockTinyMetric label="Disponible" value={num(row.available_quantity)} />
                     <StockTinyMetric label="Cobertura" value={coverageLabel(row)} />
                   </div>
-                  <p className="mt-3 text-[12px] leading-5 text-slate-600">{row.reason}</p>
                 </article>
               ))
             )}
@@ -982,9 +951,6 @@ export function StockPage() {
           <div className="flex flex-col gap-1 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-base font-800 text-slate-950">Inventario por SKU y deposito</h2>
-              <p className="mt-1 text-[13px] leading-5 text-slate-600">
-                Disponible vendible, reservado por pedidos, existencia total y conteo ciclico.
-              </p>
             </div>
             <span className="w-fit rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-800 uppercase text-slate-600">
               {filteredRows.length}/{rows.length} filas
@@ -1310,7 +1276,6 @@ export function ImportsPage() {
     <section className="grid gap-5">
       <div>
         <h1 className="text-2xl font-800 text-slate-950">Carga de archivos</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Subi un archivo para actualizar productos, clientes, vehiculos, choferes o stock.</p>
       </div>
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
         <div className="grid gap-4 md:grid-cols-[220px_1fr_auto] md:items-end">
@@ -1362,7 +1327,7 @@ export function BillingPage() {
     <section className="grid gap-4">
       <h1 className="text-2xl font-800 text-slate-950">Tu plan</h1>
       {subscriptions.length === 0 ? (
-        <EmptyState title="Todavia no tenes un plan activo" text="Cuando tengas un plan asignado, lo vas a ver aca." />
+        <EmptyState title="Todavia no tenes un plan activo" />
       ) : (
         subscriptions.map((subscription) => (
           <article key={Number(subscription.id)} className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
@@ -1464,9 +1429,9 @@ export function DistributorProfilePage() {
 
   if (!profile) {
     return loadFailed ? (
-      <EmptyState title="No pudimos cargar la distribuidora" text="Intenta de nuevo en unos segundos." />
+      <EmptyState title="No pudimos cargar la distribuidora" />
     ) : (
-      <EmptyState title="Todavia no hay una distribuidora asociada" text="Cuando la cuenta quede lista, vas a ver aca los datos de tu distribuidora." />
+      <EmptyState title="Todavia no hay una distribuidora asociada" />
     )
   }
 
@@ -1475,7 +1440,6 @@ export function DistributorProfilePage() {
       <div>
         <p className="text-sm font-800 uppercase text-brand-700">Direccion principal</p>
         <h1 className="mt-2 text-2xl font-800 text-slate-950">Perfil de la distribuidora</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Primero mantienes los datos operativos y despues gestionas la direccion principal con el mismo flujo guiado de alta o edicion.</p>
       </div>
 
       <form className="grid gap-4 rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-soft" onSubmit={(event) => void submitContact(event)}>
@@ -1510,7 +1474,6 @@ export function DistributorProfilePage() {
 
       <AddressEditor
         title={profile.address ? 'Editar direccion principal' : 'Cargar direccion principal'}
-        description="La base operativa de la distribuidora define el origen del ruteo. Por eso pedimos codigo postal, localidad valida y geolocalizacion confirmada."
         notesLabel="Indicaciones adicionales"
         saveLabel="Guardar direccion principal"
         initialValue={{
@@ -1611,9 +1574,9 @@ export function DistributorScopePage() {
 
   if (!profile) {
     return loadFailed ? (
-      <EmptyState title="No pudimos cargar el alcance" text="Intenta de nuevo en unos segundos." />
+      <EmptyState title="No pudimos cargar el alcance" />
     ) : (
-      <EmptyState title="Todavia no hay una distribuidora asociada" text="Cuando la cuenta quede lista, vas a poder configurar el alcance." />
+      <EmptyState title="Todavia no hay una distribuidora asociada" />
     )
   }
 
@@ -1625,9 +1588,6 @@ export function DistributorScopePage() {
       <div className="grid gap-2">
         <p className="text-sm font-800 uppercase tracking-[0.14em] text-brand-700">Configuracion comercial</p>
         <h1 className="text-2xl font-800 text-slate-950">Alcance de venta</h1>
-        <p className="max-w-3xl text-sm leading-6 text-slate-600">
-          Define donde aparece tu distribuidora para los clientes. Si no hay alcance configurado, no se muestra en el catalogo.
-        </p>
       </div>
 
       <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
@@ -1635,25 +1595,22 @@ export function DistributorScopePage() {
           <ScopeModeButton
             active={mode === 'NONE'}
             title="Sin alcance"
-            text="Oculta la distribuidora para clientes hasta configurar una zona."
             onClick={() => setMode('NONE')}
           />
           <ScopeModeButton
             active={mode === 'COUNTRY'}
             title="Todo Argentina"
-            text="Muestra la distribuidora a clientes con direccion geolocalizada en Argentina."
             onClick={() => setMode('COUNTRY')}
           />
           <ScopeModeButton
             active={mode === 'POLYGON'}
             title="Poligono"
-            text="Dibuja una zona operativa exacta sobre el mapa."
             onClick={() => setMode('POLYGON')}
           />
         </div>
 
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
-          <span className="font-800 text-slate-950">{serviceAreaModeLabel(mode)}.</span> {serviceAreaModeHelp(mode, points.length)}
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-800 text-slate-700">
+          {serviceAreaModeLabel(mode)}
         </div>
       </div>
 
@@ -1662,7 +1619,6 @@ export function DistributorScopePage() {
           <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-800 text-slate-950">Mapa de alcance</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Haz click para sumar vertices y arrastralos para ajustar la zona.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -1697,13 +1653,10 @@ export function DistributorScopePage() {
             <aside className="grid content-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-4">
               <div>
                 <p className="text-sm font-800 text-slate-950">{points.length} vertices</p>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
-                  {polygonIsValid ? 'El poligono esta listo para guardar.' : 'Faltan puntos para cerrar la zona.'}
-                </p>
               </div>
               <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
                 {points.length === 0 ? (
-                  <p className="text-sm text-slate-500">Todavia no hay vertices.</p>
+                  <p className="text-sm text-slate-500">Sin vertices.</p>
                 ) : (
                   points.map((point, index) => (
                     <div key={`${index}-${point.latitude}-${point.longitude}`} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-700 text-slate-600">
@@ -1718,7 +1671,7 @@ export function DistributorScopePage() {
       ) : null}
 
       <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm leading-6 text-slate-600">{currentScopeSummary(profile)}</p>
+        <p className="text-sm font-800 text-slate-700">{currentScopeSummary(profile)}</p>
         <button
           className="min-h-11 rounded-full bg-brand-600 px-5 text-sm font-800 text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
@@ -1777,17 +1730,15 @@ export function DistributorScopePage() {
 function ScopeModeButton({
   active,
   title,
-  text,
   onClick,
 }: {
   active: boolean
   title: string
-  text: string
   onClick: () => void
 }) {
   return (
     <button
-      className={`grid min-h-28 gap-2 rounded-md border p-4 text-left transition ${
+      className={`grid min-h-16 rounded-md border p-4 text-left transition ${
         active ? 'border-brand-500 bg-brand-50 text-brand-950' : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300'
       }`}
       type="button"
@@ -1795,7 +1746,6 @@ function ScopeModeButton({
       onClick={onClick}
     >
       <span className="text-base font-800">{title}</span>
-      <span className="text-sm leading-6">{text}</span>
     </button>
   )
 }
@@ -1842,18 +1792,12 @@ function serviceAreaModeLabel(mode: DistributorServiceAreaMode) {
   return 'Sin alcance'
 }
 
-function serviceAreaModeHelp(mode: DistributorServiceAreaMode, pointCount: number) {
-  if (mode === 'COUNTRY') return 'Los clientes geolocalizados en Argentina podran encontrar tu distribuidora.'
-  if (mode === 'POLYGON') return pointCount >= 3 ? 'El mapa tiene los puntos minimos para guardar.' : 'Necesitas al menos 3 vertices para guardar.'
-  return 'Los clientes no veran esta distribuidora ni sus productos.'
-}
-
 function currentScopeSummary(profile: Distributor) {
-  if (profile.service_area_mode === 'COUNTRY') return 'Alcance actual: todo Argentina.'
+  if (profile.service_area_mode === 'COUNTRY') return 'Alcance actual: Argentina.'
   if (profile.service_area_mode === 'POLYGON') {
-    return `Alcance actual: poligono con ${polygonToServiceAreaPoints(profile.service_area_polygon).length} vertices.`
+    return `Alcance actual: ${polygonToServiceAreaPoints(profile.service_area_polygon).length} vertices.`
   }
-  return 'Alcance actual: sin alcance configurado.'
+  return 'Alcance actual: sin alcance.'
 }
 
 export function AdminDistributorsPage() {
