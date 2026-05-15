@@ -188,6 +188,12 @@ export function DashboardOrdersRoutingPage() {
   }
 
   async function acceptOrder(order: Order) {
+    if (isOrderRouteLocked(order)) {
+      const message = routeLockMessage(order)
+      setActionError(message)
+      showError(message)
+      return
+    }
     const draft = drafts[order.id] ?? {
       dispatch_date: order.dispatch_date || defaultRouteDate(),
       delivery_slot_id: order.delivery_slot ?? activeSlots[0]?.id ?? 0,
@@ -217,6 +223,12 @@ export function DashboardOrdersRoutingPage() {
   }
 
   async function saveSchedule(order: Order) {
+    if (isOrderRouteLocked(order)) {
+      const message = routeLockMessage(order)
+      setActionError(message)
+      showError(message)
+      return
+    }
     const draft = drafts[order.id]
     if (!draft?.dispatch_date || !draft.delivery_slot_id) {
       setActionError('Selecciona fecha de entrega y franja para guardar la agenda.')
@@ -242,6 +254,12 @@ export function DashboardOrdersRoutingPage() {
   }
 
   async function rejectOrder(order: Order) {
+    if (isOrderRouteLocked(order)) {
+      const message = routeLockMessage(order)
+      setActionError(message)
+      showError(message)
+      return
+    }
     const confirmed = await confirm({
       title: 'Rechazar pedido',
       message: `El pedido #${order.id} quedara rechazado y se liberara el stock reservado.`,
@@ -631,6 +649,7 @@ function CustomerInfoRow({ label, value }: { label: string; value: string | numb
 
 function OrderDeliveryFlags({ order, customer }: { order: Order; customer: Commerce | null }) {
   const flags = [
+    isOrderRouteLocked(order) ? `En ${order.route_lock_label || 'HR'}` : '',
     !order.dispatch_date ? 'Sin fecha' : '',
     !order.delivery_slot && !order.delivery_slot_name ? 'Sin franja' : '',
     !((customer?.latitude && customer?.longitude) || (order.delivery_latitude && order.delivery_longitude)) ? 'Sin coordenadas' : '',
@@ -711,8 +730,13 @@ function OrderDecisionControls({
 }) {
   const canDecide = order.status === 'PENDING'
   const canAdjust = ['ACCEPTED', 'PREPARING'].includes(order.status)
+  const routeLocked = isOrderRouteLocked(order)
   const hasReadySchedule = Boolean(order.dispatch_date && order.delivery_slot)
-  const controlsDisabled = saving || activeSlots.length === 0
+  const controlsDisabled = saving || activeSlots.length === 0 || routeLocked
+
+  if (routeLocked) {
+    return <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-800 text-amber-900">{routeLockMessage(order)}</p>
+  }
 
   if (!canDecide && !canAdjust) {
     return <p className="rounded-md bg-slate-50 px-3 py-2 text-xs font-700 text-slate-500">Sin acciones comerciales para este estado.</p>
@@ -2443,6 +2467,14 @@ function statusFilterMatches(status: string, filterId: string) {
   const filter = orderStatusFilterOptions.find((option) => option.id === filterId)
   if (!filter || filter.id === 'ALL') return true
   return filter.statuses.includes(status)
+}
+
+function isOrderRouteLocked(order: Order) {
+  return order.route_locked === true
+}
+
+function routeLockMessage(order: Order) {
+  return `El pedido esta dentro de la ${order.route_lock_label || 'HR'}. Quitalo de la HR para modificarlo.`
 }
 
 function slotFilterMatches(order: Order, filterId: string) {

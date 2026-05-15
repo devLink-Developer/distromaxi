@@ -12,6 +12,7 @@ from apps.inventory.services import reserve_stock
 from apps.products.models import Product
 
 from .models import Order, OrderItem
+from .services import order_is_route_locked, order_route_lock_label
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -34,6 +35,8 @@ class OrderSerializer(serializers.ModelSerializer):
     delivery_slot_end_time = serializers.TimeField(source="delivery_slot.end_time", read_only=True, allow_null=True)
     items = OrderItemSerializer(many=True, read_only=True)
     line_items = OrderLineInputSerializer(many=True, write_only=True, required=False)
+    route_locked = serializers.SerializerMethodField()
+    route_lock_label = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -58,11 +61,19 @@ class OrderSerializer(serializers.ModelSerializer):
             "notes",
             "items",
             "line_items",
+            "route_locked",
+            "route_lock_label",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "total", "created_at", "updated_at"]
         extra_kwargs = {"commerce": {"required": False}, "distributor": {"required": False}}
+
+    def get_route_locked(self, obj):
+        return order_is_route_locked(obj)
+
+    def get_route_lock_label(self, obj):
+        return order_route_lock_label(obj)
 
     def validate(self, attrs):
         if self.instance is None and not attrs.get("line_items"):

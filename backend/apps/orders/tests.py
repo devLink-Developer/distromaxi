@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.commerces.models import Commerce
@@ -14,6 +15,7 @@ from apps.inventory.models import StockItem
 from apps.inventory.services import adjust_stock, ensure_default_warehouse
 from apps.orders.models import Order
 from apps.products.models import Product
+from apps.routing.models import RoutePlan, RouteRun, RouteStop
 
 User = get_user_model()
 
@@ -178,6 +180,71 @@ class DistroMaxiFlowTests(TestCase):
         order = Order.objects.get(pk=order_id)
         self.assertEqual(str(order.delivery_window_start), "08:00:00")
         self.assertEqual(str(order.delivery_window_end), "12:00:00")
+
+    def test_order_inside_route_plan_cannot_be_modified_until_removed_from_route(self):
+        slot = DistributorDeliverySlot.objects.create(
+            distributor=self.distributor,
+            name="Maniana",
+            start_time="08:00",
+            end_time="12:00",
+            sort_order=1,
+        )
+        order = Order.objects.create(
+            commerce=self.commerce,
+            distributor=self.distributor,
+            total=Decimal("100.00"),
+            status="ACCEPTED",
+            dispatch_date=date.today() + timedelta(days=1),
+            delivery_slot=slot,
+            delivery_address="Cliente 1",
+            delivery_window_start=slot.start_time,
+            delivery_window_end=slot.end_time,
+        )
+        route_plan = RoutePlan.objects.create(
+            distributor=self.distributor,
+            route_number="HR-LOCK-001",
+            dispatch_date=order.dispatch_date,
+            delivery_slot=slot,
+            total_runs=1,
+            total_orders=1,
+        )
+        route_run = RouteRun.objects.create(
+            route_plan=route_plan,
+            driver=self.driver,
+            vehicle=self.vehicle,
+            total_stops=1,
+        )
+        route_stop = RouteStop.objects.create(
+            route_run=route_run,
+            order=order,
+            sequence=1,
+            planned_eta=timezone.now() + timedelta(hours=1),
+            window_start_at=timezone.now(),
+            window_end_at=timezone.now() + timedelta(hours=4),
+        )
+        self.client.force_authenticate(self.distributor_user)
+
+        update_response = self.client.patch(
+            f"/api/orders/{order.id}/",
+            {"dispatch_date": (date.today() + timedelta(days=2)).isoformat(), "delivery_slot": slot.id},
+            format="json",
+        )
+        status_response = self.client.patch(f"/api/orders/{order.id}/status/", {"status": "CANCELLED"}, format="json")
+
+        self.assertEqual(update_response.status_code, 400)
+        self.assertIn("HR-LOCK-001", str(update_response.data))
+        self.assertEqual(status_response.status_code, 400)
+
+        route_stop.delete()
+        unlocked_response = self.client.patch(
+            f"/api/orders/{order.id}/",
+            {"dispatch_date": (date.today() + timedelta(days=2)).isoformat(), "delivery_slot": slot.id},
+            format="json",
+        )
+
+        self.assertEqual(unlocked_response.status_code, 200)
+        self.assertFalse(unlocked_response.data["route_locked"])
+        self.assertEqual(unlocked_response.data["dispatch_date"], (date.today() + timedelta(days=2)).isoformat())
 
     def test_distributor_decision_rejects_order_and_releases_reserved_stock(self):
         self.client.force_authenticate(self.commerce_user)

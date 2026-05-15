@@ -8,13 +8,14 @@ from apps.notifications.services import notify_order_status
 
 from .models import Order, OrderStatus
 from .serializers import OrderDecisionSerializer, OrderSerializer
+from .services import order_is_route_locked, order_route_lock_message
 
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
     def get_queryset(self):
-        queryset = Order.objects.select_related("commerce", "distributor", "delivery", "delivery_slot").prefetch_related("items")
+        queryset = Order.objects.select_related("commerce", "distributor", "delivery", "delivery_slot").prefetch_related("items", "route_stops__route_run__route_plan")
         user = self.request.user
         if user.role == "COMMERCE":
             return queryset.filter(commerce__user=user)
@@ -31,9 +32,23 @@ class OrderViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def update(self, request, *args, **kwargs):
+        order = self.get_object()
+        if order_is_route_locked(order):
+            return response.Response({"detail": order_route_lock_message(order)}, status=status.HTTP_400_BAD_REQUEST)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        order = self.get_object()
+        if order_is_route_locked(order):
+            return response.Response({"detail": order_route_lock_message(order)}, status=status.HTTP_400_BAD_REQUEST)
+        return super().destroy(request, *args, **kwargs)
+
     @decorators.action(detail=True, methods=["patch"], url_path="status")
     def set_status(self, request, pk=None):
         order = self.get_object()
+        if order_is_route_locked(order):
+            return response.Response({"detail": order_route_lock_message(order)}, status=status.HTTP_400_BAD_REQUEST)
         new_status = request.data.get("status")
         if new_status not in OrderStatus.values:
             return response.Response({"detail": "Estado inválido."}, status=status.HTTP_400_BAD_REQUEST)
@@ -55,6 +70,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not (request.user.role == "DISTRIBUTOR" or request.user.role == "ADMIN" or request.user.is_superuser):
             return response.Response({"detail": "Solo la distribuidora puede aceptar o rechazar pedidos."}, status=status.HTTP_403_FORBIDDEN)
         order = self.get_object()
+        if order_is_route_locked(order):
+            return response.Response({"detail": order_route_lock_message(order)}, status=status.HTTP_400_BAD_REQUEST)
         if order.status != OrderStatus.PENDING:
             return response.Response({"detail": "Solo se pueden aceptar o rechazar pedidos pendientes."}, status=status.HTTP_400_BAD_REQUEST)
         serializer = OrderDecisionSerializer(data=request.data, context={"order": order})

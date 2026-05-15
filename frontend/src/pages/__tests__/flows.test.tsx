@@ -826,6 +826,46 @@ describe('DistroMaxi frontend flows', () => {
     expect(screen.queryByRole('dialog', { name: /almacen luna/i })).not.toBeInTheDocument()
   })
 
+  it('blocks order schedule controls when the order is already in a route sheet', async () => {
+    const lockedOrder = {
+      ...customerSummaryOrder,
+      status: 'ACCEPTED',
+      route_locked: true,
+      route_lock_label: 'HR-000011',
+    }
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/orders/')) return jsonResponse([lockedOrder])
+      if (url.includes('/commerces/')) return jsonResponse([customerSummaryCommerce])
+      if (url.includes('/delivery-slots/')) {
+        return jsonResponse([
+          {
+            id: 8,
+            distributor: 1,
+            name: 'Maniana',
+            start_time: '08:00:00',
+            end_time: '12:00:00',
+            active: true,
+            sort_order: 1,
+            created_at: '2026-04-21T10:00:00.000Z',
+            updated_at: '2026-04-21T10:00:00.000Z',
+          },
+        ])
+      }
+      return jsonResponse([])
+    })
+
+    renderWithFeedback(
+      <MemoryRouter>
+        <DashboardOrdersRoutingPage />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/quitalo de la hr para modificarlo/i)).toBeInTheDocument()
+    expect(screen.getByText(/en HR-000011/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ajustar entrega/i })).not.toBeInTheDocument()
+  })
+
   it('shows intelligent stock suggestions and records cycle counts', async () => {
     const criticalStockRow = {
       id: 41,

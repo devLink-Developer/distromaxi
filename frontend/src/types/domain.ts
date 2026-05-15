@@ -351,6 +351,8 @@ export type Order = {
   delivery_window_end: string | null
   notes: string
   items: OrderItem[]
+  route_locked?: boolean
+  route_lock_label?: string
   created_at: string
   updated_at?: string
 }
