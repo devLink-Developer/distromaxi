@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LayerGroup, Map as LeafletMap, Marker as LeafletMarker } from 'leaflet'
 
 export type ServiceAreaPoint = {
@@ -24,6 +24,7 @@ export function ServiceAreaMap({
   onAddPoint: (point: ServiceAreaPoint) => void
   onMovePoint: (index: number, point: ServiceAreaPoint) => void
 }) {
+  const [mapReady, setMapReady] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<LeafletMap | null>(null)
   const layerRef = useRef<LayerGroup | null>(null)
@@ -31,7 +32,11 @@ export function ServiceAreaMap({
   const disabledRef = useRef(disabled)
   const onAddPointRef = useRef(onAddPoint)
   const onMovePointRef = useRef(onMovePoint)
-  const lastPointCountRef = useRef(-1)
+  const lastFocusedGeometryRef = useRef<string | null>(null)
+  const geometrySignature = useMemo(
+    () => points.map((point) => `${point.latitude.toFixed(7)},${point.longitude.toFixed(7)}`).join('|'),
+    [points],
+  )
 
   disabledRef.current = disabled
   onAddPointRef.current = onAddPoint
@@ -67,6 +72,7 @@ export function ServiceAreaMap({
 
       mapRef.current = map
       layerRef.current = L.layerGroup().addTo(map)
+      setMapReady(true)
       requestAnimationFrame(() => map.invalidateSize())
     }
 
@@ -138,14 +144,16 @@ export function ServiceAreaMap({
         markersRef.current.push(marker)
       })
 
-      if (points.length === 0 && lastPointCountRef.current !== 0) {
+      if (geometrySignature === lastFocusedGeometryRef.current) return
+
+      if (points.length === 0) {
         map.setView([ARGENTINA_CENTER.latitude, ARGENTINA_CENTER.longitude], 4)
-      } else if (points.length === 1 && lastPointCountRef.current !== 1) {
+      } else if (points.length === 1) {
         map.setView([points[0].latitude, points[0].longitude], 8)
-      } else if (points.length > 1 && points.length !== lastPointCountRef.current) {
+      } else if (points.length > 1) {
         map.fitBounds(latLngs, { padding: [30, 30], maxZoom: 13 })
       }
-      lastPointCountRef.current = points.length
+      lastFocusedGeometryRef.current = geometrySignature
     }
 
     void drawArea()
@@ -153,7 +161,7 @@ export function ServiceAreaMap({
     return () => {
       disposed = true
     }
-  }, [disabled, points])
+  }, [disabled, geometrySignature, mapReady, points])
 
   return (
     <div

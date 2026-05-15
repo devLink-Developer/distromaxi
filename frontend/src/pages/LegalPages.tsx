@@ -86,9 +86,6 @@ function LegalShell({ title, children }: { title: string; children: ReactNode })
         </header>
         <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
           {children}
-          <p className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-            Este texto es una base operativa para la plataforma. Debe revisarse con asesoria legal matriculada antes de publicarse como version contractual definitiva.
-          </p>
         </div>
       </article>
     </main>
