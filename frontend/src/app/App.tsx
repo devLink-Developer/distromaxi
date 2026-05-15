@@ -7,6 +7,7 @@ import { PwaInstallPrompt } from '../components/PwaInstallPrompt'
 import '../stores/pwaInstallStore'
 import {
   AdminDistributorsPage,
+  AdminFeedbackPage,
   AdminSubscriptionsPage,
   AdminUsersPage,
   BillingPage,
@@ -26,6 +27,7 @@ import { DashboardOrdersRoutingPage, DashboardRoutingPage } from '../pages/Routi
 import { DistributorOnboardingPage, DistributorRegisterPage } from '../pages/DistributorOnboardingPages'
 import { LoginPage, RegisterPage } from '../pages/AuthPages'
 import { LandingPage } from '../pages/LandingPage'
+import { TermsPage, UsePoliciesPage } from '../pages/LegalPages'
 import { PlansPage } from '../pages/PlansPage'
 import {
   CartPage,
@@ -60,6 +62,8 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/distributor/register" element={<DistributorRegisterPage />} />
         <Route path="/planes" element={<PlansPage />} />
+        <Route path="/terminos" element={<TermsPage />} />
+        <Route path="/politicas-de-uso" element={<UsePoliciesPage />} />
         <Route element={<ProtectedRoute roles={['DISTRIBUTOR']} allowPendingDistributor />}>
           <Route path="/distributor/onboarding" element={<DistributorOnboardingPage />} />
         </Route>
@@ -101,6 +105,7 @@ export function App() {
               <Route path="/admin" element={<Navigate to="/admin/distributors" replace />} />
               <Route path="/admin/distributors" element={<AdminDistributorsPage />} />
               <Route path="/admin/subscriptions" element={<AdminSubscriptionsPage />} />
+              <Route path="/admin/feedback" element={<AdminFeedbackPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
             </Route>
           </Route>

@@ -5,7 +5,7 @@ from .models import Plan, Subscription
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "sort_order", "price", "currency", "is_featured", "is_active")
+    list_display = ("name", "sort_order", "price", "currency", "trial_days", "is_featured", "is_active")
     list_editable = ("sort_order", "price", "is_featured", "is_active")
     list_filter = ("is_active", "is_featured")
     search_fields = ("name", "description", "mp_subscription_url", "mp_preapproval_plan_id")
@@ -20,6 +20,7 @@ class PlanAdmin(admin.ModelAdmin):
         "is_active",
         "sort_order",
         "is_featured",
+        "trial_days",
         "currency",
         "max_products",
         "max_drivers",

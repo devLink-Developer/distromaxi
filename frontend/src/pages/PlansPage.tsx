@@ -31,6 +31,7 @@ export function PlansPage() {
   }, [showError])
 
   const activePlans = useMemo(() => plans.filter((plan) => plan.is_active).sort((a, b) => a.sort_order - b.sort_order), [plans])
+  const primaryPlanName = activePlans[0]?.name ?? 'MaxiGestion'
   const customersCount = 120
   const distributorIsLogged = user?.role === 'DISTRIBUTOR'
   const distributorIsActive = user?.role === 'DISTRIBUTOR' && user.distributor_access.state === 'ACTIVE'
@@ -49,7 +50,7 @@ export function PlansPage() {
       const response = await api.selectDistributorPlan(plan.id)
       window.location.assign(response.checkout_url)
     } catch (caught) {
-      showError(errorMessage(caught, 'No pudimos abrir el pago. Revisa el plan e intenta otra vez.'))
+      showError(errorMessage(caught, 'No pudimos abrir la activacion. Revisa el plan e intenta otra vez.'))
     } finally {
       setCheckoutPlanId(null)
     }
@@ -90,15 +91,15 @@ export function PlansPage() {
           </div>
         </nav>
         <div className="relative z-10 mx-auto grid max-w-7xl gap-8 px-4 pb-12 pt-10 sm:px-6 lg:px-8 lg:pt-16">
-          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Para distribuidoras</p>
+          <p className="w-fit rounded-md bg-amber-300 px-3 py-2 text-sm font-800 text-slate-950">Oferta de lanzamiento</p>
           <div className="max-w-4xl">
-            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">Empeza a vender online con un plan pensado para tu distribuidora.</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">Crea tu cuenta, elegi un plan y segui al pago para dejar tu cuenta lista y empezar a vender.</p>
+            <h1 className="text-4xl font-800 leading-tight text-white sm:text-5xl lg:text-6xl">MaxiGestion para vender online sin costo durante 60 dias.</h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-emerald-50">Un solo plan para empezar: catalogo, pedidos, stock, reportes y entregas organizadas desde la misma cuenta.</p>
           </div>
           <div className="grid max-w-3xl gap-3 sm:grid-cols-3">
             <HeroStat value={`${customersCount}+`} label="negocios comprando con DistroMaxi" />
-            <HeroStat value="3 pasos" label="cuenta, plan y pago" />
-            <HeroStat value="Alta guiada" label="seguimos el proceso hasta que tu cuenta quede lista" />
+            <HeroStat value="60 dias" label="de prueba totalmente gratis" />
+            <HeroStat value="1 plan" label="sin comparativas ni sorpresas para arrancar" />
           </div>
         </div>
       </section>
@@ -113,7 +114,7 @@ export function PlansPage() {
             <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
               {distributorIsActive
                 ? 'Podes revisar tu plan actual y seguir configurando tu distribuidora desde el panel.'
-                : 'Elegi un plan para seguir. Despues te llevamos al pago y te avisamos cuando la cuenta quede lista.'}
+                : 'Activa el plan para seguir. Te avisamos cuando la cuenta quede lista.'}
             </p>
             {!distributorIsActive && (
               <Link className="mt-5 inline-flex min-h-11 items-center rounded-full border border-slate-300 px-4 text-sm font-800 text-slate-700 transition hover:bg-slate-50" to="/distributor/onboarding">
@@ -124,20 +125,20 @@ export function PlansPage() {
         )}
 
         <div className="max-w-3xl">
-          <p className="text-sm font-800 uppercase text-brand-700">Planes</p>
-          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Elegi el plan para tu distribuidora</h2>
-          <p className="mt-3 text-base leading-7 text-slate-600">Podes mirar los planes sin registrarte. Para seguir al pago primero tenes que crear tu cuenta.</p>
+          <p className="text-sm font-800 uppercase text-brand-700">Plan unico</p>
+          <h2 className="mt-2 text-3xl font-800 tracking-tight text-slate-950">Empeza con {primaryPlanName}</h2>
+          <p className="mt-3 text-base leading-7 text-slate-600">La prueba gratis se activa para nuevas distribuidoras durante 60 dias. Despues podes continuar con la suscripcion mensual.</p>
         </div>
         {loading ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            {[0, 1, 2].map((item) => (
+          <div className="grid max-w-3xl gap-4">
+            {[0].map((item) => (
               <div key={item} className="h-80 animate-pulse rounded-lg border border-slate-200 bg-white" />
             ))}
           </div>
         ) : activePlans.length === 0 ? (
           <EmptyState title="No hay planes disponibles" text="Intenta nuevamente en unos minutos." />
         ) : (
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className={`grid gap-4 ${activePlans.length === 1 ? 'max-w-3xl' : 'md:grid-cols-3'}`}>
             {activePlans.map((plan) => (
               <PlanCard
                 key={plan.name}
@@ -157,8 +158,8 @@ export function PlansPage() {
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
           <div>
             <p className="text-sm font-800 uppercase text-mint-700">Beneficios</p>
-            <h2 className="mt-2 text-3xl font-800 text-slate-950">Mas pedidos, menos desorden</h2>
-            <p className="mt-3 text-base leading-7 text-slate-600">Tu equipo vende, prepara y reparte con una misma vista de trabajo.</p>
+            <h2 className="mt-2 text-3xl font-800 text-slate-950">Todo lo necesario para operar desde el dia uno</h2>
+            <p className="mt-3 text-base leading-7 text-slate-600">Tu equipo vende, prepara y reparte con una misma vista de trabajo durante la prueba gratis.</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {[
@@ -176,25 +177,24 @@ export function PlansPage() {
 
       <section className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div>
-          <p className="text-sm font-800 uppercase text-brand-700">Comparativa</p>
-          <h2 className="mt-2 text-3xl font-800 text-slate-950">Lo esencial para decidir rapido</h2>
+          <p className="text-sm font-800 uppercase text-brand-700">Incluido en {primaryPlanName}</p>
+          <h2 className="mt-2 text-3xl font-800 text-slate-950">Una oferta simple para validar tu operacion</h2>
         </div>
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-soft">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="bg-slate-100 text-xs uppercase text-slate-600">
                 <tr>
-                  <th className="px-4 py-3">Plan</th>
-                  <th className="px-4 py-3">Pedidos</th>
-                  <th className="px-4 py-3">Estadisticas</th>
-                  <th className="px-4 py-3">Rutas</th>
-                  <th className="px-4 py-3">Integraciones</th>
+                  <th className="px-4 py-3">Area</th>
+                  <th className="px-4 py-3">Incluye</th>
+                  <th className="px-4 py-3">Resultado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                <CompareRow plan="Standard" pedidos="Catalogo, clientes y stock basico" stats="Inicial" rutas="Manual" venta="CSV/XLS" />
-                <CompareRow plan="Plus" pedidos="Listas de precios y descuentos" stats="Comercial y operativa" rutas="Manual" venta="Preparado para ERP" />
-                <CompareRow plan="Pro" pedidos="Automatizaciones avanzadas" stats="Logistica avanzada" rutas="Manual + automatico" venta="ERP/API y add-ons premium" />
+                <CompareRow area="Ventas" includes="Catalogo online, clientes y pedidos" result="Tu cartera compra sin depender de llamadas." />
+                <CompareRow area="Operacion" includes="Stock, listas de precios, descuentos y reportes" result="El equipo confirma con datos actualizados." />
+                <CompareRow area="Logistica" includes="Choferes, vehiculos y ruteo manual" result="Las entregas salen ordenadas por recorrido." />
+                <CompareRow area="Crecimiento" includes="Preparado para integraciones ERP" result="La prueba no limita tu proxima etapa." />
               </tbody>
             </table>
           </div>
@@ -218,19 +218,19 @@ export function PlansPage() {
 
       <section className="mx-auto grid max-w-4xl gap-4 px-4 py-12 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-800 text-slate-950">Preguntas frecuentes</h2>
-        <FaqItem question="Puedo mirar planes sin crear cuenta?" answer="Si. Los planes se pueden ver sin registrarte. Para seguir al pago primero tenes que crear tu cuenta." />
-        <FaqItem question="Donde hago el pago?" answer="El pago se hace en Mercado Pago, desde el plan que elijas." />
-        <FaqItem question="Cuando queda lista mi cuenta?" answer="Cuando el pago se confirma. Si tarda unos minutos, esta pantalla se actualiza sola." />
+        <FaqItem question="La prueba es gratis?" answer="Si. Las nuevas distribuidoras tienen 60 dias de prueba totalmente gratis en MaxiGestion." />
+        <FaqItem question="Tengo que elegir entre varios planes?" answer="No. Para empezar dejamos un solo plan con las funciones clave para vender, preparar y repartir." />
+        <FaqItem question="Que pasa despues de los 60 dias?" answer="Te avisamos para continuar con la suscripcion mensual del mismo plan." />
       </section>
 
       <section className="bg-brand-700">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div>
-            <h2 className="text-3xl font-800">Elegi tu plan y deja tu cuenta lista para empezar a vender.</h2>
-            <p className="mt-2 text-brand-50">Primero completas tus datos, despues seguis al pago y cuando quede aprobado entras a tu panel.</p>
+            <h2 className="text-3xl font-800">Empeza 60 dias gratis con {primaryPlanName}.</h2>
+            <p className="mt-2 text-brand-50">Primero completas tus datos y despues te guiamos para dejar tu cuenta lista.</p>
           </div>
           <a className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-5 font-800 text-brand-700 transition hover:bg-brand-50" href="#planes">
-            Ver planes
+            Empezar prueba
           </a>
         </div>
       </section>
@@ -261,28 +261,38 @@ function PlanCard({
         .filter(Boolean)
   const featured = plan.is_featured || highlighted
   const unavailable = !plan.mp_subscription_url || !plan.mp_preapproval_plan_id
+  const trialDays = plan.trial_days ?? 0
   const isDisabled = loading || (!activeDistributor && unavailable)
   const buttonText = activeDistributor
     ? 'Ver mi plan'
     : requiresSignup
-      ? 'Crear cuenta para seguir'
+      ? 'Crear cuenta y probar gratis'
       : loading
-        ? 'Abriendo pago...'
+        ? 'Abriendo activacion...'
         : unavailable
           ? 'Plan no disponible'
-          : 'Elegir plan'
+          : trialDays > 0
+            ? 'Empezar prueba gratis'
+            : 'Elegir plan'
 
   return (
     <article
       className={`relative rounded-lg border bg-white p-5 shadow-soft ${featured ? 'border-mint-500 ring-2 ring-mint-500' : 'border-slate-200'}`}
     >
-      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">{highlighted ? 'Plan sugerido' : 'Mas elegido'}</p>}
+      {featured && <p className="mb-4 w-fit rounded-md bg-mint-500 px-3 py-1 text-xs font-800 uppercase text-white">{trialDays > 0 ? `${trialDays} dias gratis` : highlighted ? 'Plan sugerido' : 'Mas elegido'}</p>}
       <h3 className="text-2xl font-800 text-slate-950">{plan.name}</h3>
       <p className="mt-2 min-h-12 text-sm leading-6 text-slate-600">{plan.description}</p>
+      {trialDays > 0 && (
+        <div className="mt-5 rounded-lg border border-mint-200 bg-mint-50 p-4">
+          <p className="text-sm font-800 text-mint-900">{trialDays} dias de prueba totalmente gratis</p>
+          <p className="mt-1 text-xs leading-5 text-mint-800">La oferta aplica a nuevas distribuidoras que crean su cuenta.</p>
+        </div>
+      )}
       <p className="mt-5 text-3xl font-800 text-slate-950">
         {formatPrice(plan.price)}
         <span className="text-sm font-700 text-slate-500"> / mes</span>
       </p>
+      {trialDays > 0 && <p className="mt-1 text-xs font-800 uppercase text-slate-500">Despues de la prueba</p>}
       <button
         className={`mt-5 min-h-12 w-full rounded-md px-4 font-800 transition ${
           featured ? 'bg-mint-500 text-white hover:bg-mint-700' : 'bg-brand-600 text-white hover:bg-brand-700'
@@ -297,8 +307,8 @@ function PlanCard({
         {activeDistributor
           ? 'Tu cuenta ya esta lista. Podes revisar tu plan desde el panel.'
           : requiresSignup
-            ? 'Primero te pedimos unos datos basicos y despues seguis al pago.'
-            : 'Guardamos tu eleccion y despues te llevamos al pago.'}
+            ? 'Primero te pedimos unos datos basicos y reservamos la prueba gratis.'
+            : 'Guardamos tu eleccion y abrimos la activacion del plan.'}
       </p>
       <ul className="mt-5 grid gap-3 text-sm text-slate-700">
         {benefits.map((benefit) => (
@@ -330,14 +340,12 @@ function BenefitItem({ text }: { text: string }) {
   )
 }
 
-function CompareRow({ plan, pedidos, stats, rutas, venta }: { plan: string; pedidos: string; stats: string; rutas: string; venta: string }) {
+function CompareRow({ area, includes, result }: { area: string; includes: string; result: string }) {
   return (
     <tr>
-      <td className="px-4 py-4 font-800 text-slate-950">{plan}</td>
-      <td className="px-4 py-4 text-slate-700">{pedidos}</td>
-      <td className="px-4 py-4 text-slate-700">{stats}</td>
-      <td className="px-4 py-4 text-slate-700">{rutas}</td>
-      <td className="px-4 py-4 text-slate-700">{venta}</td>
+      <td className="px-4 py-4 font-800 text-slate-950">{area}</td>
+      <td className="px-4 py-4 text-slate-700">{includes}</td>
+      <td className="px-4 py-4 text-slate-700">{result}</td>
     </tr>
   )
 }

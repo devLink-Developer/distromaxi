@@ -1,12 +1,13 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.commerces.models import Commerce
 from apps.distributors.services import distributor_access_for_user
 
-from .models import UserRole
+from .models import LEGAL_TERMS_VERSION, UserRole
 
 User = get_user_model()
 
@@ -17,8 +18,20 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "password", "full_name", "phone", "role", "is_active", "created_at", "distributor_access"]
-        read_only_fields = ["id", "created_at"]
+        fields = [
+            "id",
+            "email",
+            "password",
+            "full_name",
+            "phone",
+            "role",
+            "is_active",
+            "accepted_terms_at",
+            "accepted_terms_version",
+            "created_at",
+            "distributor_access",
+        ]
+        read_only_fields = ["id", "accepted_terms_at", "accepted_terms_version", "created_at"]
 
     def get_distributor_access(self, obj):
         return distributor_access_for_user(obj).as_dict()
@@ -44,6 +57,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    accept_terms = serializers.BooleanField(write_only=True)
     role = serializers.ChoiceField(
         choices=((UserRole.COMMERCE, "Cliente"),),
         required=False,
@@ -56,18 +70,30 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "password", "full_name", "phone", "role", "trade_name", "address", "city", "province"]
+        fields = ["id", "email", "password", "full_name", "phone", "role", "trade_name", "address", "city", "province", "accept_terms"]
         read_only_fields = ["id"]
+
+    def validate_accept_terms(self, value):
+        if value is not True:
+            raise serializers.ValidationError("Debes aceptar los Terminos y Condiciones y las Politicas de Uso para registrarte.")
+        return value
 
     @transaction.atomic
     def create(self, validated_data):
         password = validated_data.pop("password")
+        validated_data.pop("accept_terms", None)
         validated_data.pop("role", None)
         trade_name = validated_data.pop("trade_name")
         address = validated_data.pop("address", "")
         city = validated_data.pop("city", "")
         province = validated_data.pop("province", "")
-        user = User.objects.create_user(password=password, role=UserRole.COMMERCE, **validated_data)
+        user = User.objects.create_user(
+            password=password,
+            role=UserRole.COMMERCE,
+            accepted_terms_at=timezone.now(),
+            accepted_terms_version=LEGAL_TERMS_VERSION,
+            **validated_data,
+        )
         Commerce.objects.create(
             user=user,
             trade_name=trade_name,

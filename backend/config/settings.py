@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'apps.deliveries',
     'apps.notifications',
     'apps.billing',
+    'apps.feedback',
     'apps.imports',
     'apps.dashboard',
     'apps.routing',

@@ -27,6 +27,8 @@ export type User = {
   phone: string
   role: Role
   is_active: boolean
+  accepted_terms_at?: string | null
+  accepted_terms_version?: string
   distributor_access: DistributorAccess
 }
 
@@ -75,7 +77,7 @@ export type DistributorDeliverySlot = {
 
 export type Plan = {
   id: number
-  name: 'Standard' | 'Plus' | 'Pro' | string
+  name: 'MaxiGestion' | string
   price: string
   description: string
   features: string[]
@@ -85,6 +87,7 @@ export type Plan = {
   is_active: boolean
   sort_order: number
   is_featured: boolean
+  trial_days: number
   max_products?: number
   max_drivers?: number
 }
@@ -548,6 +551,34 @@ export type NotificationEvent = {
   read_at: string | null
   delivery_status: string
   created_at: string
+}
+
+export type FeedbackStatus = 'OPEN' | 'ANSWERED' | 'CLOSED'
+export type FeedbackCategory = 'SUGGESTION' | 'ISSUE' | 'QUESTION' | 'OTHER'
+
+export type FeedbackMessage = {
+  id: number
+  author: number
+  author_name: string
+  author_role: Role
+  body: string
+  is_staff_reply: boolean
+  created_at: string
+}
+
+export type FeedbackThread = {
+  id: number
+  created_by: number
+  created_by_name: string
+  created_by_email: string
+  created_by_role: Role
+  subject: string
+  category: FeedbackCategory
+  status: FeedbackStatus
+  last_message_at: string | null
+  created_at: string
+  updated_at: string
+  messages: FeedbackMessage[]
 }
 
 export type ImportJob = {

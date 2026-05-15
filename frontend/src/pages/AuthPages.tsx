@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { BrandLogo } from '../components/BrandLogo'
+import { LegalAcceptance } from '../components/LegalAcceptance'
 import { ApiError } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useFeedbackStore } from '../stores/feedbackStore'
@@ -100,6 +101,7 @@ export function RegisterPage() {
         email: form.get('email'),
         phone: form.get('phone'),
         password: form.get('password'),
+        accept_terms: form.get('accept_terms') === 'on',
       })
       showSuccess('Cuenta de cliente creada. Ya podes ingresar.')
       event.currentTarget.reset()
@@ -147,6 +149,7 @@ export function RegisterPage() {
         <p className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-700 leading-6 text-emerald-900">
           La direccion la completas despues desde tu cuenta.
         </p>
+        <LegalAcceptance />
         <button
           className="min-h-12 rounded-full bg-brand-600 px-5 text-base font-800 text-white transition hover:bg-brand-700 disabled:opacity-60"
           disabled={loading}

@@ -18,6 +18,7 @@ class PlanSerializer(serializers.ModelSerializer):
             "is_active",
             "sort_order",
             "is_featured",
+            "trial_days",
             "max_products",
             "max_drivers",
         ]

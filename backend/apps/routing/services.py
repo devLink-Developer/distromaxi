@@ -11,7 +11,7 @@ from apps.distributors.utils import get_user_distributor
 from .models import RoutePlanStatus, RouteRunStatus, RouteStopStatus
 
 
-MANUAL_ROUTING_PLANS = {"STANDARD", "PLUS", "PRO"}
+MANUAL_ROUTING_PLANS = {"STANDARD", "PLUS", "PRO", "MAXIGESTION"}
 AUTOMATIC_ROUTING_PLANS = {"PRO"}
 
 
@@ -51,7 +51,7 @@ def get_manual_routing_distributor(user):
     if distributor is None:
         raise PermissionDenied("No encontramos una distribuidora asociada a esta cuenta.")
     if not distributor_has_manual_routing(distributor):
-        raise PermissionDenied("El ruteo manual esta disponible para planes Standard, Plus y Pro activos.")
+        raise PermissionDenied("El ruteo manual esta disponible para el plan MaxiGestion activo.")
     return distributor
 
 

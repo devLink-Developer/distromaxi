@@ -217,7 +217,7 @@ class DistributorServiceAreaApiTests(TestCase):
 class DistributorOnboardingFlowTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.plan = Plan.objects.get(name="Pro")
+        self.plan = Plan.objects.get(name="MaxiGestion")
         self.plan.mp_preapproval_plan_id = "pro-plan-id"
         self.plan.mp_subscription_url = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=pro-plan-id"
         self.plan.save(update_fields=["mp_preapproval_plan_id", "mp_subscription_url"])
@@ -230,6 +230,7 @@ class DistributorOnboardingFlowTests(TestCase):
             "phone": "1111-2222",
             "tax_id": "30-12345678-9",
             "password": "Demo1234!",
+            "accept_terms": True,
         }
         payload.update(overrides)
         return self.client.post("/api/auth/register-distributor", payload, format="json")
@@ -246,6 +247,8 @@ class DistributorOnboardingFlowTests(TestCase):
         self.assertEqual(user.role, "DISTRIBUTOR")
         self.assertEqual(onboarding.status, "ACCOUNT_CREATED")
         self.assertEqual(onboarding.tax_id, "30-12345678-9")
+        self.assertIsNotNone(user.accepted_terms_at)
+        self.assertTrue(user.accepted_terms_version)
         self.assertEqual(response.data["user"]["distributor_access"]["state"], "ONBOARDING")
         self.assertEqual(response.data["onboarding"]["status"], "ACCOUNT_CREATED")
 

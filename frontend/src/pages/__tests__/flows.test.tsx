@@ -352,6 +352,7 @@ describe('DistroMaxi frontend flows', () => {
     await userEvent.type(screen.getByLabelText(/^email$/i), 'ana@test.local')
     await userEvent.type(screen.getByLabelText(/telefono/i), '1111-2222')
     await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
+    await userEvent.click(screen.getByLabelText(/acepto los/i))
 
     await userEvent.click(screen.getByRole('button', { name: /crear cuenta/i }))
 
@@ -363,6 +364,7 @@ describe('DistroMaxi frontend flows', () => {
         trade_name: 'Almacen Ana',
         email: 'ana@test.local',
         phone: '1111-2222',
+        accept_terms: true,
       })
       expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('role')
       expect(JSON.parse(String(registerCall?.[1]?.body))).not.toHaveProperty('address')
@@ -442,6 +444,7 @@ describe('DistroMaxi frontend flows', () => {
     await userEvent.type(screen.getByLabelText(/telefono/i), '1111-2222')
     await userEvent.type(screen.getByLabelText(/cuit/i), '30-12345678-9')
     await userEvent.type(screen.getByLabelText(/contrasena/i), 'Demo1234!')
+    await userEvent.click(screen.getByLabelText(/acepto los/i))
     await userEvent.click(screen.getByRole('button', { name: /seguir con los planes/i }))
 
     await waitFor(() => {
@@ -468,30 +471,18 @@ describe('DistroMaxi frontend flows', () => {
     vi.mocked(fetch).mockReturnValue(
       jsonResponse([
         {
-          id: 1,
-          name: 'Standard',
-          price: '19900.00',
-          description: 'Conexion proveedor-comprador con catalogo, pedidos y ruteo manual.',
-          features: ['Catalogo online', 'Pedidos', 'Ruteo manual'],
-          currency: 'ARS',
-          mp_subscription_url: 'https://www.mercadopago.com.ar/start',
-          mp_preapproval_plan_id: 'start-plan',
-          is_active: true,
-          sort_order: 10,
-          is_featured: false,
-        },
-        {
           id: 2,
-          name: 'Plus',
+          name: 'MaxiGestion',
           price: '49900.00',
-          description: 'Dashboard comercial, alertas y reportes exportables.',
-          features: ['Todo Standard', 'Dashboard comercial', 'Reportes exportables'],
+          description: 'Operacion comercial y logistica para distribuidoras con 60 dias gratis.',
+          features: ['60 dias de prueba totalmente gratis', 'Dashboard comercial', 'Reportes exportables'],
           currency: 'ARS',
           mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
           mp_preapproval_plan_id: 'pro-plan',
           is_active: true,
-          sort_order: 20,
+          sort_order: 10,
           is_featured: true,
+          trial_days: 60,
         },
       ]),
     )
@@ -502,9 +493,9 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText(/empeza a vender online con un plan pensado para tu distribuidora/i)).toBeInTheDocument()
-    expect(await screen.findByText('Standard')).toBeInTheDocument()
-    expect(screen.getByText('Mas elegido')).toBeInTheDocument()
+    expect(screen.getByText(/maxigestion para vender online sin costo durante 60 dias/i)).toBeInTheDocument()
+    expect(await screen.findByText('MaxiGestion')).toBeInTheDocument()
+    expect(screen.getByText('60 dias gratis')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/plans'), expect.any(Object))
   })
 
@@ -540,16 +531,17 @@ describe('DistroMaxi frontend flows', () => {
             phone: '1111-2222',
             selected_plan: {
               id: 2,
-              name: 'Plus',
+              name: 'MaxiGestion',
               price: '49900.00',
               description: 'Escala tu operacion.',
-              features: ['Todo Standard', 'Dashboard comercial'],
+              features: ['60 dias de prueba totalmente gratis', 'Dashboard comercial'],
               currency: 'ARS',
               mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
               mp_preapproval_plan_id: 'pro-plan',
               is_active: true,
-              sort_order: 20,
+              sort_order: 10,
               is_featured: true,
+              trial_days: 60,
             },
             checkout_url: 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=pro-plan',
             review_reason: '',
@@ -566,16 +558,17 @@ describe('DistroMaxi frontend flows', () => {
         return jsonResponse([
           {
             id: 2,
-            name: 'Plus',
+            name: 'MaxiGestion',
             price: '49900.00',
             description: 'Escala tu operacion.',
-            features: ['Todo Standard', 'Dashboard comercial'],
+            features: ['60 dias de prueba totalmente gratis', 'Dashboard comercial'],
             currency: 'ARS',
             mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
             mp_preapproval_plan_id: 'pro-plan',
             is_active: true,
-            sort_order: 20,
+            sort_order: 10,
             is_featured: true,
+            trial_days: 60,
           },
         ])
       }
@@ -588,7 +581,7 @@ describe('DistroMaxi frontend flows', () => {
       </MemoryRouter>,
     )
 
-    await userEvent.click(await screen.findByRole('button', { name: /elegir plan/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /empezar prueba gratis/i }))
 
     await waitFor(() => {
       const selectPlanCall = vi
@@ -604,32 +597,18 @@ describe('DistroMaxi frontend flows', () => {
     const updatedUrl = 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=start-updated'
     const plans = [
       {
-        id: 1,
-        name: 'Standard',
-        price: '19900.00',
-        description: 'Ideal para comenzar. Gestion basica de pedidos.',
-        features: ['Catalogo online', 'Ruteo manual'],
-        currency: 'ARS',
-        mp_subscription_url: 'https://www.mercadopago.com.ar/start',
-        mp_preapproval_plan_id: 'start-plan',
-        is_active: true,
-        sort_order: 10,
-        is_featured: false,
-        max_products: 500,
-        max_drivers: 10,
-      },
-      {
         id: 2,
-        name: 'Plus',
+        name: 'MaxiGestion',
         price: '49900.00',
-        description: 'Escala tu operacion. Estadisticas avanzadas.',
-        features: ['Todo Standard', 'Dashboard comercial'],
+        description: 'Escala tu operacion con 60 dias gratis.',
+        features: ['60 dias de prueba totalmente gratis', 'Dashboard comercial'],
         currency: 'ARS',
         mp_subscription_url: 'https://www.mercadopago.com.ar/pro',
         mp_preapproval_plan_id: 'pro-plan',
         is_active: true,
-        sort_order: 20,
+        sort_order: 10,
         is_featured: true,
+        trial_days: 60,
         max_products: 5000,
         max_drivers: 80,
       },
@@ -637,7 +616,7 @@ describe('DistroMaxi frontend flows', () => {
 
     vi.mocked(fetch).mockImplementation((input, options) => {
       const url = String(input)
-      if (url.includes('/plans/1/') && options?.method === 'PATCH') {
+      if (url.includes('/plans/2/') && options?.method === 'PATCH') {
         return jsonResponse({ ...plans[0], mp_subscription_url: updatedUrl, mp_preapproval_plan_id: 'start-updated' })
       }
       if (url.includes('/plans')) return jsonResponse(plans)
@@ -664,12 +643,13 @@ describe('DistroMaxi frontend flows', () => {
     await waitFor(() => {
       const updateCall = vi
         .mocked(fetch)
-        .mock.calls.find(([url, options]) => String(url).includes('/plans/1/') && options?.method === 'PATCH')
+        .mock.calls.find(([url, options]) => String(url).includes('/plans/2/') && options?.method === 'PATCH')
       expect(updateCall).toBeTruthy()
       expect(JSON.parse(String(updateCall?.[1]?.body))).toMatchObject({
         mp_subscription_url: updatedUrl,
         mp_preapproval_plan_id: 'start-updated',
         is_active: true,
+        trial_days: '60',
       })
     })
   })

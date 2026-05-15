@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { BrandLogo } from '../components/BrandLogo'
+import { LegalAcceptance } from '../components/LegalAcceptance'
 import { ApiError, api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { useFeedbackStore } from '../stores/feedbackStore'
@@ -13,8 +14,8 @@ const publicHeroImage = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c
 
 const distributorSteps = [
   { title: 'Cuenta', text: 'Creamos tu cuenta con los datos principales.' },
-  { title: 'Plan', text: 'Elegi el plan que mejor se adapte a tu distribuidora.' },
-  { title: 'Activacion', text: 'Cuando el pago queda confirmado, habilitamos tu panel.' },
+  { title: 'Plan', text: 'Activamos MaxiGestion con 60 dias de prueba gratis.' },
+  { title: 'Activacion', text: 'Cuando la cuenta queda confirmada, habilitamos tu panel.' },
 ]
 
 export function DistributorRegisterPage() {
@@ -43,6 +44,7 @@ export function DistributorRegisterPage() {
         phone: form.get('phone'),
         tax_id: form.get('tax_id'),
         password,
+        accept_terms: form.get('accept_terms') === 'on',
       })
       await login(email, password)
       const chosenPlan = searchParams.get('plan')
@@ -58,9 +60,9 @@ export function DistributorRegisterPage() {
     <DistributorShell
       badge="Para distribuidoras"
       title="Crea tu cuenta distribuidora"
-      text="Dejanos tus datos basicos y despues elegi el plan con el que queres empezar a vender."
+      text="Dejanos tus datos basicos y despues activa la prueba gratis de MaxiGestion."
       asideTitle="Como sigue"
-      asideText="Primero completas tus datos, despues elegis un plan y cuando el pago quede aprobado te avisamos por esta misma pantalla."
+      asideText="Primero completas tus datos, despues activas el plan unico y te avisamos por esta misma pantalla cuando la cuenta quede lista."
       footer={
         <div className="grid gap-2 text-sm text-slate-600">
           <p>
@@ -115,6 +117,7 @@ export function DistributorRegisterPage() {
             />
           </label>
         </div>
+        <LegalAcceptance />
         <button
           className="min-h-12 rounded-full bg-brand-600 px-5 text-base font-800 text-white transition hover:bg-brand-700 disabled:opacity-60"
           disabled={loading}
@@ -185,7 +188,7 @@ export function DistributorOnboardingPage() {
       setOnboarding(response.onboarding)
       window.location.assign(response.checkout_url)
     } catch (caught) {
-      showError(errorMessage(caught, 'No pudimos volver a abrir el pago. Intenta nuevamente.'))
+      showError(errorMessage(caught, 'No pudimos continuar la activacion. Intenta nuevamente.'))
     } finally {
       setCheckoutLoading(false)
     }
@@ -268,7 +271,7 @@ export function DistributorOnboardingPage() {
                   type="button"
                   onClick={() => void reopenCheckout()}
                 >
-                  {checkoutLoading ? 'Abriendo pago...' : 'Volver al pago'}
+                  {checkoutLoading ? 'Abriendo activacion...' : 'Continuar activacion'}
                 </button>
               )}
             </div>
@@ -374,7 +377,7 @@ function DistributorShell({
               </div>
               <div className="rounded-[1.5rem] border border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
                 <p className="text-xs font-800 uppercase tracking-[0.18em] text-emerald-100">Pago</p>
-                <p className="mt-3 text-lg font-800">El pago se hace en Mercado Pago y esta pantalla te avisa cuando la cuenta queda lista.</p>
+                <p className="mt-3 text-lg font-800">La prueba gratis dura 60 dias y esta pantalla te avisa cuando la cuenta queda lista.</p>
               </div>
             </div>
           </div>
@@ -467,27 +470,27 @@ function statusCopy(onboarding: DistributorOnboardingState | null) {
     case 'REVIEW_REQUIRED':
       return {
         eyebrow: 'Necesitamos revisarlo',
-        title: 'Estamos chequeando tu pago.',
+        title: 'Estamos chequeando tu activacion.',
         description: 'Nos llego un aviso y estamos terminando de validar la cuenta.',
-        note: onboarding.review_reason || 'Si queres, podes volver a intentar el pago o esperar nuestra confirmacion.',
+        note: onboarding.review_reason || 'Si queres, podes continuar la activacion o esperar nuestra confirmacion.',
         classes: 'border-amber-200 bg-amber-50 text-amber-950',
       }
     case 'FAILED':
       return {
         eyebrow: 'No pudimos terminar el alta',
-        title: 'El pago no pudo confirmarse.',
+        title: 'La activacion no pudo confirmarse.',
         description: 'Tu cuenta sigue guardada para que puedas intentarlo de nuevo cuando quieras.',
-        note: onboarding.failure_reason || 'Podes volver al pago y terminar el alta.',
+        note: onboarding.failure_reason || 'Podes volver a intentar y terminar el alta.',
         classes: 'border-red-200 bg-red-50 text-red-950',
       }
     default:
       return {
         eyebrow: 'Seguimos con el alta',
-        title: onboarding?.selected_plan ? 'Estamos revisando tu pago.' : 'Falta elegir un plan.',
+        title: onboarding?.selected_plan ? 'Estamos revisando tu activacion.' : 'Falta activar el plan.',
         description: onboarding?.selected_plan
-          ? 'Apenas el pago quede confirmado, tu cuenta va a quedar lista y vas a poder entrar al panel.'
-          : 'Tu cuenta ya esta creada. Ahora elegi el plan con el que queres empezar.',
-        note: onboarding?.selected_plan ? 'Si ya pagaste, no hace falta repetirlo: esta pantalla se actualiza sola.' : '',
+          ? 'Apenas quede confirmado, tu cuenta va a quedar lista y vas a poder entrar al panel.'
+          : 'Tu cuenta ya esta creada. Ahora activa MaxiGestion para empezar la prueba gratis.',
+        note: onboarding?.selected_plan ? 'Si ya completaste este paso, no hace falta repetirlo: esta pantalla se actualiza sola.' : '',
         classes: 'border-brand-200 bg-brand-50 text-slate-950',
       }
   }

@@ -297,7 +297,7 @@ class DriverCurrentRouteView(APIView):
         if user.role != "DRIVER" or not hasattr(user, "driver_profile"):
             return response.Response({"detail": "Solo los choferes pueden consultar su ruta actual."}, status=status.HTTP_403_FORBIDDEN)
             if not distributor_has_manual_routing(user.driver_profile.distributor):
-                return response.Response({"detail": "El ruteo manual esta disponible para planes Standard, Plus y Pro activos."}, status=status.HTTP_403_FORBIDDEN)
+                return response.Response({"detail": "El ruteo manual esta disponible para el plan MaxiGestion activo."}, status=status.HTTP_403_FORBIDDEN)
         queryset = (
             RouteRun.objects.select_related("route_plan", "driver", "driver__user", "vehicle")
             .prefetch_related("stops", "stops__order", "stops__order__commerce", "stops__delivery", "stops__lines", "stops__lines__product")

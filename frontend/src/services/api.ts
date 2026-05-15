@@ -10,6 +10,7 @@ import type {
   DistributorPlanSelectionResponse,
   DistributorSignupResponse,
   DriverProfile,
+  FeedbackThread,
   GeocodedAddress,
   ImportJob,
   NotificationEvent,
@@ -118,6 +119,13 @@ export const api = {
     ),
   me: () => apiFetch<User>('/auth/me'),
   plans: () => apiFetch<Plan[]>('/plans'),
+  feedbackThreads: () => apiFetch<FeedbackThread[]>('/feedback-threads/'),
+  createFeedbackThread: (body: { subject: string; category: string; initial_message: string }) =>
+    apiFetch<FeedbackThread>('/feedback-threads/', { method: 'POST', body }),
+  replyFeedbackThread: (id: number, body: { body: string }) =>
+    apiFetch(`/feedback-threads/${id}/reply/`, { method: 'POST', body }),
+  updateFeedbackThread: (id: number, body: { status?: string; subject?: string; category?: string }) =>
+    apiFetch<FeedbackThread>(`/feedback-threads/${id}/`, { method: 'PATCH', body }),
   distributorOnboarding: () => apiFetch<DistributorOnboardingState>('/distributor-onboarding'),
   selectDistributorPlan: (planId: number) =>
     apiFetch<DistributorPlanSelectionResponse>('/distributor-onboarding/select-plan', {

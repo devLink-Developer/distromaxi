@@ -33,6 +33,7 @@ from apps.distributors.views import (
     MercadoPagoSubscriptionWebhookView,
 )
 from apps.fleet.views import DriverProfileViewSet, VehicleViewSet
+from apps.feedback.views import FeedbackThreadViewSet
 from apps.imports.views import ImportJobViewSet
 from apps.inventory.views import StockItemViewSet, StockMovementViewSet, WarehouseViewSet
 from apps.notifications.views import NotificationEventViewSet, PushSubscriptionViewSet
@@ -61,6 +62,7 @@ router.register('push-subscriptions', PushSubscriptionViewSet, basename='push-su
 router.register('notifications', NotificationEventViewSet, basename='notifications')
 router.register('plans', PlanViewSet, basename='plans')
 router.register('subscriptions', SubscriptionViewSet, basename='subscriptions')
+router.register('feedback-threads', FeedbackThreadViewSet, basename='feedback-threads')
 router.register('imports', ImportJobViewSet, basename='imports')
 router.register('route-plans', RoutePlanViewSet, basename='route-plans')
 router.register('route-stops', RouteStopViewSet, basename='route-stops')

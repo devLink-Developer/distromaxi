@@ -10,6 +10,9 @@ class UserRole(models.TextChoices):
     DRIVER = "DRIVER", "Chofer"
 
 
+LEGAL_TERMS_VERSION = "2026-05-15"
+
+
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
@@ -45,6 +48,8 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=180)
     phone = models.CharField(max_length=40, blank=True)
     role = models.CharField(max_length=20, choices=UserRole.choices, default=UserRole.COMMERCE)
+    accepted_terms_at = models.DateTimeField(null=True, blank=True)
+    accepted_terms_version = models.CharField(max_length=30, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

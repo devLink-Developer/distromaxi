@@ -29,6 +29,7 @@ import type {
   DashboardPoint,
   Distributor,
   DistributorServiceAreaMode,
+  FeedbackThread,
   GeoJsonPolygon,
   ImportJob,
   Order,
@@ -1880,7 +1881,7 @@ export function AdminSubscriptionsPage() {
     <section className="grid gap-8">
       <ResourceManager
         title="Planes"
-        description="Edita los planes que se muestran a las distribuidoras, el precio y el enlace de pago."
+        description="Edita el plan unico que se muestra a las distribuidoras, su prueba gratis, el precio y el enlace de pago."
         endpoint="plans"
         createLabel="Agregar plan"
         allowDelete={false}
@@ -1891,13 +1892,12 @@ export function AdminSubscriptionsPage() {
             type: 'select',
             required: true,
             options: [
-              { value: 'Standard', label: 'Standard' },
-              { value: 'Plus', label: 'Plus' },
-              { value: 'Pro', label: 'Pro' },
+              { value: 'MaxiGestion', label: 'MaxiGestion' },
             ],
           },
           { name: 'price', label: 'Precio mensual', type: 'number', required: true },
           { name: 'description', label: 'Descripcion', type: 'textarea' },
+          { name: 'trial_days', label: 'Dias de prueba', type: 'number', required: true },
           {
             name: 'mp_subscription_url',
             label: 'Enlace de pago',
@@ -1914,11 +1914,12 @@ export function AdminSubscriptionsPage() {
           { name: 'max_products', label: 'Maximo de productos', type: 'number', required: true },
           { name: 'max_drivers', label: 'Maximo de choferes', type: 'number', required: true },
           { name: 'is_active', label: 'Plan visible en la landing', type: 'checkbox' },
-          { name: 'is_featured', label: 'Marcar como mas elegido', type: 'checkbox' },
+          { name: 'is_featured', label: 'Destacar oferta', type: 'checkbox' },
         ]}
         columns={[
           { key: 'name', label: 'Plan' },
           { key: 'price', label: 'Precio', format: (value) => money(value) },
+          { key: 'trial_days', label: 'Prueba' },
           { key: 'mp_subscription_url', label: 'Enlace de pago' },
           { key: 'mp_preapproval_plan_id', label: 'Codigo del plan' },
           { key: 'is_active', label: 'Visible', format: yesNo },
@@ -1960,6 +1961,149 @@ export function AdminSubscriptionsPage() {
           { key: 'expires_at', label: 'Vencimiento' },
         ]}
       />
+    </section>
+  )
+}
+
+export function AdminFeedbackPage() {
+  const [threads, setThreads] = useState<FeedbackThread[]>([])
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const showError = useFeedbackStore((state) => state.error)
+  const showSuccess = useFeedbackStore((state) => state.success)
+  const selectedThread = useMemo(() => threads.find((thread) => thread.id === selectedId) ?? threads[0] ?? null, [selectedId, threads])
+
+  async function load(nextSelectedId?: number) {
+    setLoading(true)
+    try {
+      const data = await api.feedbackThreads()
+      setThreads(data)
+      if (nextSelectedId) setSelectedId(nextSelectedId)
+      else if (!selectedId && data[0]) setSelectedId(data[0].id)
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No pudimos cargar las opiniones.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function submitReply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedThread || submitting) return
+    const form = new FormData(event.currentTarget)
+    const body = String(form.get('reply') ?? '').trim()
+    if (!body) return
+    setSubmitting(true)
+    try {
+      await api.replyFeedbackThread(selectedThread.id, { body })
+      event.currentTarget.reset()
+      await load(selectedThread.id)
+      showSuccess('Respuesta enviada.')
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No pudimos enviar la respuesta.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function closeThread() {
+    if (!selectedThread || submitting) return
+    setSubmitting(true)
+    try {
+      await api.updateFeedbackThread(selectedThread.id, { status: 'CLOSED' })
+      await load(selectedThread.id)
+      showSuccess('Hilo cerrado.')
+    } catch (caught) {
+      showError(caught instanceof Error ? caught.message : 'No pudimos cerrar el hilo.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <section className="grid gap-5">
+      <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+        <p className="text-sm font-800 uppercase text-brand-700">Opiniones</p>
+        <h1 className="mt-1 text-2xl font-800 text-slate-950">Conversaciones con usuarios</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">Lee opiniones de compradores y distribuidoras, responde y cierra hilos cuando queden resueltos.</p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[24rem_1fr]">
+        <aside className="grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-soft">
+          {loading ? <p className="p-3 text-sm font-800 text-slate-500">Cargando opiniones...</p> : null}
+          {!loading && threads.length === 0 ? <EmptyState title="No hay opiniones" text="Cuando un usuario escriba desde el boton flotante, aparece aca." /> : null}
+          {threads.map((thread) => (
+            <button
+              key={thread.id}
+              className={`rounded-md border p-3 text-left transition ${selectedThread?.id === thread.id ? 'border-brand-400 bg-brand-50' : 'border-slate-200 hover:bg-slate-50'}`}
+              type="button"
+              onClick={() => setSelectedId(thread.id)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-800 text-slate-950">{thread.subject}</p>
+                  <p className="mt-1 text-xs font-800 uppercase text-slate-500">{thread.created_by_role === 'DISTRIBUTOR' ? 'Distribuidora' : 'Comprador'}</p>
+                </div>
+                <span className={`rounded-md px-2 py-1 text-[11px] font-800 uppercase ${feedbackStatusClass(thread.status)}`}>{feedbackStatusLabel(thread.status)}</span>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{thread.created_by_name} - {thread.created_by_email}</p>
+            </button>
+          ))}
+        </aside>
+
+        <section className="min-h-[34rem] rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          {selectedThread ? (
+            <div className="grid min-h-full content-between gap-5">
+              <div>
+                <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-800 uppercase text-brand-700">{feedbackCategoryLabel(selectedThread.category)}</p>
+                    <h2 className="mt-1 text-xl font-800 text-slate-950">{selectedThread.subject}</h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">{selectedThread.created_by_name} - {selectedThread.created_by_email}</p>
+                  </div>
+                  {selectedThread.status !== 'CLOSED' && (
+                    <button className="min-h-11 rounded-md border border-slate-300 px-4 text-sm font-800 text-slate-700 transition hover:bg-slate-50 disabled:opacity-60" type="button" disabled={submitting} onClick={() => void closeThread()}>
+                      Cerrar hilo
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-5 grid gap-3">
+                  {selectedThread.messages.map((message) => (
+                    <article key={message.id} className={`max-w-[42rem] rounded-lg border p-4 ${message.is_staff_reply ? 'justify-self-end border-brand-200 bg-brand-50' : 'justify-self-start border-slate-200 bg-slate-50'}`}>
+                      <p className="text-xs font-800 uppercase text-slate-500">{message.is_staff_reply ? 'Admin DistroMaxi' : message.author_name}</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">{message.body}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              {selectedThread.status !== 'CLOSED' ? (
+                <form className="grid gap-3 border-t border-slate-200 pt-4" onSubmit={submitReply}>
+                  <label className="grid gap-1 text-sm font-800 text-slate-700">
+                    Respuesta
+                    <textarea className="min-h-28 rounded-md border border-slate-300 px-3 py-2 text-base sm:text-sm" name="reply" required />
+                  </label>
+                  <button className="min-h-11 w-fit rounded-md bg-brand-600 px-4 text-sm font-800 text-white transition hover:bg-brand-700 disabled:opacity-60" type="submit" disabled={submitting}>
+                    {submitting ? 'Enviando...' : 'Responder'}
+                  </button>
+                </form>
+              ) : (
+                <p className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm font-800 text-slate-600">Hilo cerrado.</p>
+              )}
+            </div>
+          ) : (
+            <div className="grid min-h-[24rem] place-items-center text-center">
+              <p className="text-sm font-800 text-slate-500">Selecciona una opinion para responder.</p>
+            </div>
+          )}
+        </section>
+      </div>
     </section>
   )
 }
@@ -2110,6 +2254,25 @@ function asNumber(value: unknown) {
 
 function money(value: unknown) {
   return `$${asNumber(value).toLocaleString('es-AR')}`
+}
+
+function feedbackStatusLabel(status: FeedbackThread['status']) {
+  if (status === 'ANSWERED') return 'Respondido'
+  if (status === 'CLOSED') return 'Cerrado'
+  return 'Abierto'
+}
+
+function feedbackStatusClass(status: FeedbackThread['status']) {
+  if (status === 'ANSWERED') return 'bg-emerald-50 text-emerald-700'
+  if (status === 'CLOSED') return 'bg-slate-100 text-slate-600'
+  return 'bg-amber-50 text-amber-700'
+}
+
+function feedbackCategoryLabel(category: FeedbackThread['category']) {
+  if (category === 'ISSUE') return 'Problema'
+  if (category === 'QUESTION') return 'Consulta'
+  if (category === 'OTHER') return 'Otro'
+  return 'Sugerencia'
 }
 
 function pct(value: unknown) {

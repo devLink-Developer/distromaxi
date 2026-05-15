@@ -15,8 +15,8 @@ from apps.products.models import Product, ProductCategory, ProductSubCategory, P
 
 User = get_user_model()
 
-PRO_PLAN_URL = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=0b5dbf4e218448818eaea55b9aa8e182"
-PRO_PLAN_ID = "0b5dbf4e218448818eaea55b9aa8e182"
+MAXIGESTION_PLAN_URL = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=0b5dbf4e218448818eaea55b9aa8e182"
+MAXIGESTION_PLAN_ID = "0b5dbf4e218448818eaea55b9aa8e182"
 
 
 class Command(BaseCommand):
@@ -44,36 +44,37 @@ class Command(BaseCommand):
                 "latitude": Decimal("-34.6037220"),
                 "longitude": Decimal("-58.3815920"),
                 "subscription_status": "ACTIVE",
-                "plan_name": "Pro",
-                "mercado_pago_link": PRO_PLAN_URL,
+                "plan_name": "MaxiGestion",
+                "mercado_pago_link": MAXIGESTION_PLAN_URL,
                 "active": True,
             },
         )
         plan, created = Plan.objects.get_or_create(
-            name="Pro",
+            name="MaxiGestion",
             defaults={
-                "price": Decimal("89900.00"),
-                "description": "Automatizacion logistica y comercial con ruteo automatico e integraciones avanzadas.",
+                "price": Decimal("49900.00"),
+                "description": "Operacion comercial y logistica con 60 dias de prueba gratis.",
                 "currency": "ARS",
-                "mp_subscription_url": PRO_PLAN_URL,
-                "mp_preapproval_plan_id": PRO_PLAN_ID,
+                "mp_subscription_url": MAXIGESTION_PLAN_URL,
+                "mp_preapproval_plan_id": MAXIGESTION_PLAN_ID,
                 "is_active": True,
+                "trial_days": 60,
                 "features": [
-                    "Todo Plus",
-                    "Ruteo automatico y replanificacion",
-                    "Optimizacion multi-vehiculo",
-                    "Metricas logisticas avanzadas",
-                    "Integraciones avanzadas",
+                    "60 dias de prueba totalmente gratis",
+                    "Catalogo online proveedor-comprador",
+                    "Dashboard comercial y operativo",
+                    "Listas de precios y reportes exportables",
+                    "Ruteo manual para organizar entregas",
                 ],
-                "sort_order": 30,
-                "is_featured": False,
-                "max_products": 12000,
-                "max_drivers": 200,
+                "sort_order": 10,
+                "is_featured": True,
+                "max_products": 5000,
+                "max_drivers": 80,
             },
         )
         if not created and (not plan.mp_subscription_url or not plan.mp_preapproval_plan_id):
-            plan.mp_subscription_url = plan.mp_subscription_url or PRO_PLAN_URL
-            plan.mp_preapproval_plan_id = plan.mp_preapproval_plan_id or PRO_PLAN_ID
+            plan.mp_subscription_url = plan.mp_subscription_url or MAXIGESTION_PLAN_URL
+            plan.mp_preapproval_plan_id = plan.mp_preapproval_plan_id or MAXIGESTION_PLAN_ID
             plan.save(update_fields=["mp_subscription_url", "mp_preapproval_plan_id"])
         Subscription.objects.update_or_create(
             distributor=distributor,
@@ -82,7 +83,7 @@ class Command(BaseCommand):
                 "status": "ACTIVE",
                 "mercado_pago_link": plan.mp_subscription_url,
                 "starts_at": date.today(),
-                "expires_at": date.today() + timedelta(days=30),
+                "expires_at": date.today() + timedelta(days=60),
             },
         )
 

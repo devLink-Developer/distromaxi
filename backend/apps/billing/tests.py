@@ -12,15 +12,14 @@ class PlanApiTests(TestCase):
         self.client = APIClient()
 
     def test_plans_endpoint_is_public_and_ordered(self):
-        Plan.objects.filter(name="Pro").update(is_active=False)
-
         response = self.client.get("/api/plans")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([plan["name"] for plan in response.data], ["Standard", "Plus"])
-        self.assertTrue(set(response.data[0]).issuperset({"name", "price", "description", "features", "mp_subscription_url", "mp_preapproval_plan_id"}))
+        self.assertEqual([plan["name"] for plan in response.data], ["MaxiGestion"])
+        self.assertTrue(set(response.data[0]).issuperset({"name", "price", "description", "features", "trial_days", "mp_subscription_url", "mp_preapproval_plan_id"}))
         self.assertTrue(response.data[0]["mp_preapproval_plan_id"])
-        self.assertTrue(response.data[1]["is_featured"])
+        self.assertEqual(response.data[0]["trial_days"], 60)
+        self.assertTrue(response.data[0]["is_featured"])
 
     def test_plan_admin_exposes_editable_business_fields(self):
         model_admin = PlanAdmin(Plan, admin.site)
@@ -30,6 +29,7 @@ class PlanApiTests(TestCase):
         self.assertIn("features", model_admin.fields)
         self.assertIn("is_active", model_admin.fields)
         self.assertIn("sort_order", model_admin.fields)
+        self.assertIn("trial_days", model_admin.fields)
 
     def test_role_admin_can_update_plan_subscription_url(self):
         user = get_user_model().objects.create_user(
@@ -38,7 +38,7 @@ class PlanApiTests(TestCase):
             full_name="Admin",
             role="ADMIN",
         )
-        plan = Plan.objects.get(name="Standard")
+        plan = Plan.objects.get(name="MaxiGestion")
         new_url = "https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=start-updated"
 
         self.client.force_authenticate(user=user)
@@ -60,7 +60,7 @@ class PlanApiTests(TestCase):
             full_name="Cliente",
             role="COMMERCE",
         )
-        plan = Plan.objects.get(name="Standard")
+        plan = Plan.objects.get(name="MaxiGestion")
         original_url = plan.mp_subscription_url
 
         self.client.force_authenticate(user=user)

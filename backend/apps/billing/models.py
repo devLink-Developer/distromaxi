@@ -3,9 +3,7 @@ from django.db import models
 
 class Plan(models.Model):
     class PlanName(models.TextChoices):
-        STANDARD = "Standard", "Standard"
-        PLUS = "Plus", "Plus"
-        PRO = "Pro", "Pro"
+        MAXIGESTION = "MaxiGestion", "MaxiGestion"
 
     name = models.CharField(max_length=20, choices=PlanName.choices, unique=True)
     price = models.DecimalField(max_digits=12, decimal_places=2)
@@ -17,6 +15,7 @@ class Plan(models.Model):
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
     is_featured = models.BooleanField(default=False)
+    trial_days = models.PositiveIntegerField(default=0)
     max_products = models.PositiveIntegerField(default=500)
     max_drivers = models.PositiveIntegerField(default=20)
 

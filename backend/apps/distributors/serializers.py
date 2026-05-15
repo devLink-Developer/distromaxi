@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from apps.billing.serializers import PlanSerializer
 from apps.billing.models import Plan
-from apps.users.models import UserRole
+from apps.users.models import LEGAL_TERMS_VERSION, UserRole
 
 from .models import Distributor, DistributorDeliverySlot, DistributorOnboarding, DistributorOnboardingStatus
 from .services import onboarding_snapshot_for_user
@@ -150,6 +150,7 @@ class DistributorDeliverySlotSerializer(serializers.ModelSerializer):
 class DistributorSignupSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
+    accept_terms = serializers.BooleanField(write_only=True)
     business_name = serializers.CharField(max_length=180)
     contact_name = serializers.CharField(max_length=180)
     phone = serializers.CharField(max_length=40)
@@ -166,15 +167,23 @@ class DistributorSignupSerializer(serializers.Serializer):
             raise serializers.ValidationError("Ya existe una cuenta distribuidora con este CUIT.")
         return normalized
 
+    def validate_accept_terms(self, value):
+        if value is not True:
+            raise serializers.ValidationError("Debes aceptar los Terminos y Condiciones y las Politicas de Uso para registrarte.")
+        return value
+
     @transaction.atomic
     def create(self, validated_data):
         password = validated_data.pop("password")
+        validated_data.pop("accept_terms", None)
         user = User.objects.create_user(
             email=validated_data["email"],
             password=password,
             full_name=validated_data["contact_name"],
             phone=validated_data["phone"],
             role=UserRole.DISTRIBUTOR,
+            accepted_terms_at=timezone.now(),
+            accepted_terms_version=LEGAL_TERMS_VERSION,
         )
         DistributorOnboarding.objects.create(
             user=user,

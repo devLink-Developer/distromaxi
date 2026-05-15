@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuthStore } from '../stores/authStore'
 import { BrandLogo } from './BrandLogo'
+import { FloatingFeedbackButton } from './FloatingFeedbackButton'
 import { Icon } from './Icon'
 
 type AppLink = {
@@ -44,6 +45,7 @@ const driverLinks: AppLink[] = [
 const adminLinks: AppLink[] = [
   { to: '/admin/distributors', label: 'Distribuidoras', icon: 'truck' as const },
   { to: '/admin/subscriptions', label: 'Suscripciones', icon: 'wallet' as const },
+  { to: '/admin/feedback', label: 'Opiniones', icon: 'message' as const },
   { to: '/admin/users', label: 'Usuarios', icon: 'users' as const },
 ]
 
@@ -186,6 +188,7 @@ export function AppLayout() {
           <MobileMenuButton expanded={isMobileMenuOpen} onClick={() => setIsMobileMenuOpen(true)} />
         ) : null}
       </nav>
+      <FloatingFeedbackButton />
     </div>
   )
 }
