@@ -64,8 +64,8 @@ class RouteStopsPatchSerializer(serializers.Serializer):
 
 
 class RouteStopLineSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source="product.name", read_only=True)
-    sku = serializers.CharField(source="product.sku", read_only=True)
+    product_name = serializers.CharField(source="order_item.product_name", read_only=True)
+    sku = serializers.CharField(source="order_item.sku", read_only=True)
 
     class Meta:
         model = RouteStopLine

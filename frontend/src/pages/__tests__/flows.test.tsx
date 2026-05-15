@@ -134,11 +134,23 @@ const distributor = {
 
 const routePlan = {
   id: 11,
+  route_number: 'HR-000011',
   distributor: 1,
   distributor_name: 'Distribuidora Andina',
   dispatch_date: '2026-04-22',
+  delivery_slot: 8,
+  delivery_slot_name: 'Maniana',
+  delivery_window_start: '08:00:00',
+  delivery_window_end: '12:00:00',
   status: 'DRAFT',
   provider: 'ors',
+  routing_status: 'optimized',
+  route_geometry: null,
+  preview_payload: {},
+  reviewed_at: null,
+  reviewed_by: null,
+  planning_version: 1,
+  capacity_override_reason: '',
   total_runs: 1,
   total_orders: 1,
   total_distance_km: '12.000',
@@ -171,6 +183,8 @@ const routePlan = {
           delivery_address: 'Humboldt 1400',
           delivery_latitude: '-34.5841000',
           delivery_longitude: '-58.4351000',
+          lat: '-34.5841000',
+          lng: '-58.4351000',
           sequence: 1,
           status: 'PENDING',
           planned_eta: '2026-04-22T10:00:00.000Z',
@@ -180,6 +194,24 @@ const routePlan = {
           leg_duration_min: '20.00',
           demand_kg: '8.000',
           demand_m3: '0.300000',
+          address_snapshot: {},
+          lines: [
+            {
+              id: 41,
+              order_item: 51,
+              product: 1,
+              product_name: 'Agua mineral 1.5L x 6',
+              sku: 'AGUA-15-6',
+              quantity: '3.000',
+              uom: 'bulto',
+              weight_kg: '8.000',
+              volume_m3: '0.300000',
+              delivered_qty: '0.000',
+              returned_qty: '0.000',
+              difference_qty: '0.000',
+              capacity_estimated: false,
+            },
+          ],
         },
       ],
     },
@@ -1010,6 +1042,65 @@ describe('DistroMaxi frontend flows', () => {
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/route-plans/?') && String(url).includes('dispatch_date=') && String(url).includes('delivery_slot_id=8'))).toBe(true)
       expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/route-plans/pending-orders/?') && String(url).includes('dispatch_date=') && String(url).includes('delivery_slot_id=8'))).toBe(true)
     })
+  })
+
+  it('prints a preparation sheet for confirmed routes', async () => {
+    const confirmedPlan = { ...routePlan, status: 'CONFIRMED', can_delete: false }
+    const written: string[] = []
+    const printMock = vi.fn()
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue({
+      document: {
+        open: vi.fn(),
+        write: vi.fn((html: string) => written.push(html)),
+        close: vi.fn(),
+      },
+      focus: vi.fn(),
+      print: printMock,
+    } as unknown as Window)
+
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/delivery-slots/')) {
+        return jsonResponse([
+          {
+            id: 8,
+            distributor: 1,
+            name: 'Maniana',
+            start_time: '08:00:00',
+            end_time: '12:00:00',
+            active: true,
+            sort_order: 1,
+            created_at: '2026-04-21T10:00:00.000Z',
+            updated_at: '2026-04-21T10:00:00.000Z',
+          },
+        ])
+      }
+      if (url.includes('/vehicles/')) return jsonResponse([])
+      if (url.includes('/drivers/')) return jsonResponse([])
+      if (url.includes('/route-plans/pending-orders/')) return jsonResponse([])
+      if (url.includes('/route-plans/')) return jsonResponse([confirmedPlan])
+      return jsonResponse([])
+    })
+
+    renderWithFeedback(
+      <MemoryRouter>
+        <DashboardRoutingPage />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('option', { name: /maniana/i })
+    await userEvent.selectOptions(screen.getByLabelText(/franja horaria/i), '8')
+    await userEvent.click(await screen.findByRole('button', { name: /imprimir preparacion/i }))
+
+    const html = written.join('')
+    expect(openSpy).toHaveBeenCalled()
+    expect(printMock).toHaveBeenCalled()
+    expect(html).toContain('Hoja de preparacion')
+    expect(html).toContain('HR-000011')
+    expect(html).toContain('Pedido #10')
+    expect(html).toContain('Agua mineral 1.5L x 6')
+    expect(html).toContain('AGUA-15-6')
+    openSpy.mockRestore()
   })
 
   it('summarizes only orders from the selected routing date and slot', async () => {

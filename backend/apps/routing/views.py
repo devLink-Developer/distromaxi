@@ -46,6 +46,7 @@ class RoutePlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.
             "runs__stops__order__commerce",
             "runs__stops__delivery",
             "runs__stops__lines",
+            "runs__stops__lines__order_item",
             "runs__stops__lines__product",
         )
         dispatch_date = self.request.query_params.get("dispatch_date")
@@ -300,7 +301,7 @@ class DriverCurrentRouteView(APIView):
                 return response.Response({"detail": "El ruteo manual esta disponible para el plan MaxiGestion activo."}, status=status.HTTP_403_FORBIDDEN)
         queryset = (
             RouteRun.objects.select_related("route_plan", "driver", "driver__user", "vehicle")
-            .prefetch_related("stops", "stops__order", "stops__order__commerce", "stops__delivery", "stops__lines", "stops__lines__product")
+            .prefetch_related("stops", "stops__order", "stops__order__commerce", "stops__delivery", "stops__lines", "stops__lines__order_item", "stops__lines__product")
             .filter(driver=user.driver_profile, route_plan__status__in=[RoutePlanStatus.DISPATCHED, RoutePlanStatus.CONFIRMED])
             .order_by("-route_plan__dispatch_date", "sequence")
         )
@@ -324,7 +325,7 @@ class RouteStopViewSet(viewsets.ReadOnlyModelViewSet):
             "order",
             "order__commerce",
             "delivery",
-        ).prefetch_related("lines", "lines__product")
+        ).prefetch_related("lines", "lines__order_item", "lines__product")
         user = self.request.user
         if user.role == "DRIVER" and hasattr(user, "driver_profile"):
             if not distributor_has_manual_routing(user.driver_profile.distributor):

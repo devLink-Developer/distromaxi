@@ -1199,10 +1199,16 @@ export function DashboardRoutingPage() {
       if (action === 'confirm') await api.confirmRoutePlan(planId, { reviewed: true })
       else if (action === 'dispatch') await api.dispatchRoutePlan(planId)
       else await api.replanRoutePlan(planId)
-      showSuccess(action === 'confirm' ? 'Borrador confirmado.' : action === 'dispatch' ? 'Ruta despachada.' : 'Se genero una nueva propuesta.')
+      showSuccess(action === 'confirm' ? 'Borrador confirmado. Ya podes imprimir la hoja de preparacion.' : action === 'dispatch' ? 'Ruta despachada.' : 'Se genero una nueva propuesta.')
       await load(dispatchDate, selectedDeliverySlotId)
     } catch (caught) {
       showError(caught instanceof Error ? caught.message : 'No se pudo completar la accion.')
+    }
+  }
+
+  function printPreparation(plan: RoutePlan) {
+    if (!openPreparationSheet(plan)) {
+      showError('No se pudo abrir la hoja de preparacion. Revisa si el navegador bloqueo la ventana emergente.')
     }
   }
 
@@ -1523,6 +1529,11 @@ export function DashboardRoutingPage() {
                   {!editable && plan.status === 'CONFIRMED' ? (
                     <button className="min-h-11 rounded-md bg-brand-600 px-4 font-800 text-white" type="button" onClick={() => void runAction('dispatch', plan.id)}>
                       Despachar
+                    </button>
+                  ) : null}
+                  {!editable && canPrintPreparationSheet(plan) ? (
+                    <button className="min-h-11 rounded-md border border-slate-300 px-4 font-800 text-slate-700" type="button" onClick={() => printPreparation(plan)}>
+                      Imprimir preparacion
                     </button>
                   ) : null}
                   {automaticRoutingEnabled && !editable && plan.status !== 'DISPATCHED' && plan.status !== 'COMPLETED' ? (
@@ -2114,6 +2125,162 @@ function capacityNumber(value: string | number | null | undefined) {
 function formatCapacityAmount(value: number, unit: 'kg' | 'm3') {
   if (!Number.isFinite(value) || value <= 0) return `sin ${unit}`
   return `${value.toLocaleString('es-AR', { maximumFractionDigits: unit === 'kg' ? 0 : 2 })} ${unit}`
+}
+
+function canPrintPreparationSheet(plan: RoutePlan) {
+  return ['CONFIRMED', 'DISPATCHED', 'COMPLETED'].includes(plan.status)
+}
+
+function openPreparationSheet(plan: RoutePlan) {
+  const printWindow = window.open('', '_blank', 'width=1024,height=768')
+  if (!printWindow) return false
+  printWindow.document.open()
+  printWindow.document.write(buildPreparationSheetHtml(plan))
+  printWindow.document.close()
+  printWindow.focus()
+  printWindow.print()
+  return true
+}
+
+function buildPreparationSheetHtml(plan: RoutePlan) {
+  const routeNumber = plan.route_number || `HR-${String(plan.id).padStart(6, '0')}`
+  const totalLines = plan.runs.reduce((total, run) => total + run.stops.reduce((stopTotal, stop) => stopTotal + (stop.lines?.length ?? 0), 0), 0)
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(routeNumber)} - Hoja de preparacion</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.35; }
+    main { max-width: 980px; margin: 0 auto; background: #fff; padding: 24px; }
+    header { display: grid; gap: 14px; border-bottom: 2px solid #0f172a; padding-bottom: 16px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 25px; line-height: 1.1; }
+    h2 { font-size: 16px; }
+    h3 { font-size: 14px; }
+    .muted { color: #475569; }
+    .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .meta div { border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; }
+    .meta strong { display: block; color: #64748b; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+    .run { break-inside: avoid; margin-top: 18px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+    .run-head { display: flex; justify-content: space-between; gap: 12px; background: #0f172a; color: #fff; padding: 10px 12px; }
+    .run-body { display: grid; gap: 12px; padding: 12px; }
+    .order { break-inside: avoid; border: 1px solid #e2e8f0; border-radius: 7px; overflow: hidden; }
+    .order-head { display: grid; gap: 4px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #e2e8f0; padding: 7px; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; color: #334155; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+    .num { text-align: right; white-space: nowrap; }
+    .check-cell { width: 46px; text-align: center; }
+    .check-box { display: inline-block; width: 18px; height: 18px; border: 2px solid #0f172a; border-radius: 3px; }
+    .empty { color: #64748b; font-weight: 700; text-align: center; }
+    footer { margin-top: 18px; border-top: 1px solid #cbd5e1; padding-top: 10px; color: #64748b; }
+    @media print {
+      body { background: #fff; }
+      main { padding: 0; max-width: none; }
+      .run { break-inside: avoid-page; }
+      .order { break-inside: avoid-page; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="muted">Hoja de preparacion</p>
+        <h1>${escapeHtml(routeNumber)}</h1>
+      </div>
+      <div class="meta">
+        <div><strong>Distribuidora</strong>${escapeHtml(plan.distributor_name)}</div>
+        <div><strong>Entrega</strong>${escapeHtml(formatOrderDate(plan.dispatch_date))}</div>
+        <div><strong>Franja</strong>${escapeHtml(routeSlotSummary(plan))}</div>
+        <div><strong>Estado</strong>${escapeHtml(plan.status)}</div>
+        <div><strong>Recorridos</strong>${plan.total_runs}</div>
+        <div><strong>Pedidos</strong>${plan.total_orders}</div>
+        <div><strong>Articulos</strong>${totalLines}</div>
+        <div><strong>Carga</strong>${escapeHtml(formatCapacityAmount(Number(plan.total_load_kg), 'kg'))} / ${escapeHtml(formatCapacityAmount(Number(plan.total_load_m3), 'm3'))}</div>
+      </div>
+    </header>
+    ${plan.runs.map(preparationRunSection).join('')}
+    <footer>Emitida ${escapeHtml(new Date().toLocaleString('es-AR'))}. Verificar cantidades preparadas y cargadas antes del despacho.</footer>
+  </main>
+</body>
+</html>`
+}
+
+function preparationRunSection(run: RouteRun) {
+  return `<section class="run">
+  <div class="run-head">
+    <div>
+      <h2>Recorrido ${run.sequence}</h2>
+      <p>${escapeHtml(run.driver_name)} - ${escapeHtml(run.vehicle_plate || 'Vehiculo sin patente')}</p>
+    </div>
+    <div>${run.total_stops} paradas</div>
+  </div>
+  <div class="run-body">
+    ${run.stops.map(preparationOrderSection).join('')}
+  </div>
+</section>`
+}
+
+function preparationOrderSection(stop: RouteStop) {
+  return `<section class="order">
+  <div class="order-head">
+    <h3>Parada ${stop.sequence} - Pedido #${stop.order} - ${escapeHtml(stop.commerce_name)}</h3>
+    <p class="muted">${escapeHtml(stop.delivery_address)}</p>
+    <p class="muted">Ventana ${escapeHtml(timeValueLabel(stop.window_start_at))}-${escapeHtml(timeValueLabel(stop.window_end_at))} - ETA ${escapeHtml(timeLabel(stop.planned_eta))}</p>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="check-cell">Prep.</th>
+        <th>SKU</th>
+        <th>Articulo</th>
+        <th class="num">Cant.</th>
+        <th>Unidad</th>
+        <th class="num">Kg</th>
+        <th class="num">M3</th>
+        <th class="check-cell">Carga</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${preparationLineRows(stop)}
+    </tbody>
+  </table>
+</section>`
+}
+
+function preparationLineRows(stop: RouteStop) {
+  const lines = stop.lines ?? []
+  if (lines.length === 0) {
+    return '<tr><td class="empty" colspan="8">Sin articulos registrados para este pedido.</td></tr>'
+  }
+  return lines
+    .map(
+      (line) => `<tr>
+        <td class="check-cell"><span class="check-box"></span></td>
+        <td>${escapeHtml(line.sku || '-')}</td>
+        <td>${escapeHtml(line.product_name || `Producto #${line.product}`)}</td>
+        <td class="num">${escapeHtml(formatQuantity(line.quantity))}</td>
+        <td>${escapeHtml(line.uom || '-')}</td>
+        <td class="num">${escapeHtml(formatCapacityAmount(Number(line.weight_kg), 'kg'))}</td>
+        <td class="num">${escapeHtml(formatCapacityAmount(Number(line.volume_m3), 'm3'))}</td>
+        <td class="check-cell"><span class="check-box"></span></td>
+      </tr>`,
+    )
+    .join('')
+}
+
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 function CapacityMeter({ metrics, className = '' }: { metrics: CapacityMetrics; className?: string }) {
