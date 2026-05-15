@@ -936,10 +936,9 @@ describe('DistroMaxi frontend flows', () => {
     await userEvent.type(within(dialog).getByLabelText(/fecha de entrega/i), '2026-04-22')
     await userEvent.selectOptions(within(dialog).getByLabelText(/franja horaria/i), '8')
     await userEvent.type(within(dialog).getByLabelText(/buscar articulo/i), 'Agua')
-    await userEvent.selectOptions(within(dialog).getByLabelText(/^articulo$/i), '1')
-    await userEvent.clear(within(dialog).getByLabelText(/^cantidad$/i))
-    await userEvent.type(within(dialog).getByLabelText(/^cantidad$/i), '2')
-    await userEvent.click(within(dialog).getByRole('button', { name: /agregar/i }))
+    await userEvent.clear(within(dialog).getByLabelText(/cantidad agua mineral/i))
+    await userEvent.type(within(dialog).getByLabelText(/cantidad agua mineral/i), '2')
+    await userEvent.click(within(dialog).getByRole('button', { name: /agregar agua mineral/i }))
     await userEvent.click(within(dialog).getByRole('button', { name: /crear pedido manual/i }))
 
     await waitFor(() => {

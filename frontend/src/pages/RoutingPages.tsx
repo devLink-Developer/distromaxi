@@ -735,12 +735,10 @@ function ManualOrderModal({
   const [deliverySlotId, setDeliverySlotId] = useState<number | ''>(activeSlots[0]?.id ?? '')
   const [notes, setNotes] = useState('')
   const [productQuery, setProductQuery] = useState('')
-  const [selectedProductId, setSelectedProductId] = useState<number | ''>('')
-  const [quantity, setQuantity] = useState('1')
+  const [productQuantities, setProductQuantities] = useState<Record<number, string>>({})
   const [lines, setLines] = useState<ManualOrderLineDraft[]>([])
   const [localError, setLocalError] = useState<string | null>(null)
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
-  const selectedProduct = selectedProductId ? productById.get(selectedProductId) ?? null : null
   const normalizedCustomerQuery = customerQuery.trim().toLocaleLowerCase()
   const normalizedProductQuery = productQuery.trim().toLocaleLowerCase()
   const filteredCustomers = customers.filter((customer) => {
@@ -782,35 +780,38 @@ function ManualOrderModal({
     if (!deliverySlotId && activeSlots[0]) setDeliverySlotId(activeSlots[0].id)
   }, [activeSlots, deliverySlotId])
 
-  function addLine() {
-    if (!selectedProduct) {
-      setLocalError('Selecciona un articulo.')
-      return
-    }
-    const nextQuantity = Number(quantity)
+  function productDraftQuantity(productId: number) {
+    return productQuantities[productId] ?? '1'
+  }
+
+  function updateProductDraftQuantity(productId: number, value: string) {
+    setProductQuantities((current) => ({ ...current, [productId]: value }))
+  }
+
+  function addLine(product: Product) {
+    const nextQuantity = Number(productDraftQuantity(product.id))
     if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) {
       setLocalError('Ingresa una cantidad mayor a cero.')
       return
     }
-    const available = productAvailable(selectedProduct)
-    const currentQuantity = Number(lines.find((line) => line.productId === selectedProduct.id)?.quantity ?? 0)
+    const available = productAvailable(product)
+    const currentQuantity = Number(lines.find((line) => line.productId === product.id)?.quantity ?? 0)
     if (available <= 0 || currentQuantity + nextQuantity > available) {
-      setLocalError(`Stock disponible para ${selectedProduct.name}: ${formatQuantity(available)}.`)
+      setLocalError(`Stock disponible para ${product.name}: ${formatQuantity(available)}.`)
       return
     }
     setLines((current) => {
-      const existing = current.find((line) => line.productId === selectedProduct.id)
+      const existing = current.find((line) => line.productId === product.id)
       if (existing) {
         return current.map((line) =>
-          line.productId === selectedProduct.id
+          line.productId === product.id
             ? { ...line, quantity: trimQuantity(currentQuantity + nextQuantity) }
             : line,
         )
       }
-      return [...current, { productId: selectedProduct.id, quantity: trimQuantity(nextQuantity) }]
+      return [...current, { productId: product.id, quantity: trimQuantity(nextQuantity) }]
     })
-    setSelectedProductId('')
-    setQuantity('1')
+    setProductQuantities((current) => ({ ...current, [product.id]: '1' }))
     setLocalError(null)
   }
 
@@ -937,14 +938,6 @@ function ManualOrderModal({
               Fecha de entrega
               <input className="min-h-11 rounded-md border border-slate-300 px-3" type="date" value={dispatchDate} onChange={(event) => setDispatchDate(event.target.value)} />
             </label>
-            <div className="flex flex-wrap gap-2">
-              <button className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => setDispatchDate(addDaysIso(0))}>
-                Hoy
-              </button>
-              <button className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => setDispatchDate(addDaysIso(1))}>
-                Maniana
-              </button>
-            </div>
             <label className="grid gap-1 text-sm font-700 text-slate-700">
               Franja horaria
               <select
@@ -980,37 +973,50 @@ function ManualOrderModal({
                 onChange={(event) => setProductQuery(event.target.value)}
               />
             </label>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
-              <label className="grid gap-1 text-sm font-700 text-slate-700">
-                Articulo
-                <select
-                  className="min-h-11 rounded-md border border-slate-300 bg-white px-3"
-                  value={selectedProductId}
-                  onChange={(event) => setSelectedProductId(event.target.value ? Number(event.target.value) : '')}
-                >
-                  <option value="">Seleccionar articulo</option>
-                  {filteredProducts.slice(0, 80).map((product) => (
-                    <option key={product.id} value={product.id} disabled={productAvailable(product) <= 0}>
-                      {product.sku ? `${product.sku} - ` : ''}{product.name} - disp. {formatQuantity(productAvailable(product))}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="grid gap-1 text-sm font-700 text-slate-700">
-                Cantidad
-                <input
-                  className="min-h-11 rounded-md border border-slate-300 px-3"
-                  type="number"
-                  min="0.001"
-                  step="0.001"
-                  max={selectedProduct ? productAvailable(selectedProduct) : undefined}
-                  value={quantity}
-                  onChange={(event) => setQuantity(event.target.value)}
-                />
-              </label>
-              <button className="min-h-11 rounded-md border border-brand-200 px-4 text-sm font-800 text-brand-700 transition hover:bg-brand-50" type="button" onClick={addLine}>
-                Agregar
-              </button>
+            <div className="grid max-h-[22rem] gap-2 overflow-y-auto rounded-md border border-slate-200 p-2" role="list" aria-label="Resultados de articulos">
+              {filteredProducts.length === 0 ? (
+                <p className="px-2 py-3 text-sm font-700 text-slate-500">No hay articulos que coincidan con la busqueda.</p>
+              ) : (
+                filteredProducts.slice(0, 30).map((product) => {
+                  const available = productAvailable(product)
+                  const disabled = available <= 0
+                  return (
+                    <div key={product.id} className="grid min-w-0 gap-3 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto] sm:items-center" role="listitem">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-800 text-slate-950">{product.name}</p>
+                        <p className="mt-1 break-words text-xs font-700 text-slate-500">
+                          {product.sku ? `SKU ${product.sku} - ` : ''}{formatMoney(product.price)} por {product.unit || 'unidad'}
+                        </p>
+                        <p className={`mt-1 text-xs font-800 ${disabled ? 'text-red-700' : 'text-slate-600'}`}>
+                          Stock {formatQuantity(available)}
+                        </p>
+                      </div>
+                      <label className="grid gap-1 text-xs font-800 text-slate-600">
+                        Cantidad
+                        <input
+                          className="min-h-10 w-full min-w-0 rounded-md border border-slate-300 px-3 text-sm disabled:bg-slate-100"
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          max={available}
+                          value={productDraftQuantity(product.id)}
+                          disabled={disabled}
+                          aria-label={`Cantidad ${product.name}`}
+                          onChange={(event) => updateProductDraftQuantity(product.id, event.target.value)}
+                        />
+                      </label>
+                      <button
+                        className="min-h-10 rounded-md border border-brand-200 px-3 text-xs font-800 text-brand-700 transition hover:bg-brand-50 disabled:border-slate-200 disabled:text-slate-400"
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => addLine(product)}
+                      >
+                        Agregar <span className="sr-only">{product.name}</span>
+                      </button>
+                    </div>
+                  )
+                })
+              )}
             </div>
 
             <div className="grid gap-2">
