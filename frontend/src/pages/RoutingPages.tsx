@@ -881,8 +881,8 @@ function ManualOrderModal({
         onClick={(event) => event.stopPropagation()}
         onSubmit={submit}
       >
-          <header className="flex shrink-0 justify-end border-b border-slate-200 px-3 py-2">
-            <h2 id="manual-order-title" className="sr-only">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+            <h2 id="manual-order-title" className="text-lg font-800 text-slate-950">
               Crear pedido manual
             </h2>
             <button
