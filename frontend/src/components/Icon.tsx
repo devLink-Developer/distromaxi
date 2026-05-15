@@ -14,6 +14,7 @@ type IconName =
   | 'upload'
   | 'search'
   | 'pin'
+  | 'plus'
   | 'logout'
   | 'download'
   | 'message'
@@ -34,6 +35,7 @@ const paths: Record<IconName, string> = {
   upload: 'M12 16V4m0 0 4 4m-4-4-4 4M4 16v4h16v-4',
   search: 'M10.5 18a7.5 7.5 0 1 1 5.3-12.8 7.5 7.5 0 0 1-5.3 12.8Zm5.5-2 5 5',
   pin: 'M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  plus: 'M12 5v14M5 12h14',
   logout: 'M14 8V5a1 1 0 0 0-1-1H5v16h8a1 1 0 0 0 1-1v-3m-2-4h9m0 0-3-3m3 3-3 3',
   download: 'M12 3v12m0 0 4-4m-4 4-4-4M5 17v3h14v-3',
   message: 'M4 5h16v11H8l-4 4V5Zm5 5h6m-6 3h4',

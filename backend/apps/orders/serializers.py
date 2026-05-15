@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
-from apps.distributors.utils import distributor_contains_point
+from apps.distributors.utils import distributor_contains_point, get_user_distributor
 from apps.distributors.models import DistributorDeliverySlot
 from apps.inventory.services import reserve_stock
 from apps.products.models import Product
@@ -67,7 +67,11 @@ class OrderSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "total", "created_at", "updated_at"]
-        extra_kwargs = {"commerce": {"required": False}, "distributor": {"required": False}}
+        extra_kwargs = {
+            "commerce": {"required": False},
+            "distributor": {"required": False},
+            "delivery_address": {"required": False, "allow_blank": True},
+        }
 
     def get_route_locked(self, obj):
         return order_is_route_locked(obj)
@@ -76,6 +80,10 @@ class OrderSerializer(serializers.ModelSerializer):
         return order_route_lock_label(obj)
 
     def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        user_role = getattr(user, "role", None)
+        request_distributor = get_user_distributor(user)
         if self.instance is None and not attrs.get("line_items"):
             raise serializers.ValidationError({"line_items": "El pedido debe tener al menos un articulo."})
         start = attrs.get("delivery_window_start", getattr(self.instance, "delivery_window_start", None))
@@ -84,16 +92,24 @@ class OrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"delivery_window_end": "La franja horaria es invalida."})
         delivery_slot = attrs.get("delivery_slot")
         if delivery_slot is not None:
-            distributor = attrs.get("distributor", getattr(self.instance, "distributor", None))
+            distributor = attrs.get("distributor", getattr(self.instance, "distributor", None)) or request_distributor
             if distributor is not None and delivery_slot.distributor_id != distributor.id:
                 raise serializers.ValidationError({"delivery_slot": "La franja no pertenece a la distribuidora del pedido."})
             if not delivery_slot.active:
                 raise serializers.ValidationError({"delivery_slot": "Selecciona una franja activa."})
         if self.instance is None:
-            request = self.context.get("request")
             commerce = attrs.get("commerce")
-            if commerce is None and getattr(getattr(request, "user", None), "role", None) == "COMMERCE" and hasattr(request.user, "commerce_profile"):
-                commerce = request.user.commerce_profile
+            if commerce is None and user_role == "COMMERCE" and hasattr(user, "commerce_profile"):
+                commerce = user.commerce_profile
+            if user_role == "DISTRIBUTOR":
+                if commerce is None:
+                    raise serializers.ValidationError({"commerce": "Selecciona un cliente registrado."})
+                if request_distributor is None or commerce.distributor_id != request_distributor.id:
+                    raise serializers.ValidationError({"commerce": "Selecciona un cliente registrado de tu distribuidora."})
+                if not attrs.get("dispatch_date"):
+                    raise serializers.ValidationError({"dispatch_date": "Selecciona la fecha de entrega."})
+                if delivery_slot is None:
+                    raise serializers.ValidationError({"delivery_slot": "Selecciona una franja horaria."})
             delivery_address = attrs.get("delivery_address") or getattr(commerce, "address", "")
             delivery_latitude = attrs.get("delivery_latitude", getattr(commerce, "latitude", None))
             delivery_longitude = attrs.get("delivery_longitude", getattr(commerce, "longitude", None))

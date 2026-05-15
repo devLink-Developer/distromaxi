@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DragEvent } from 'react'
+import type { DragEvent, FormEvent } from 'react'
 import type { LayerGroup, Map as LeafletMap } from 'leaflet'
 
 import { EmptyState } from '../components/EmptyState'
+import { Icon } from '../components/Icon'
 import { StatusBadge } from '../components/StatusBadge'
 import { api } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -15,6 +16,7 @@ import type {
   GeoJsonMultiLine,
   Order,
   PendingRouteOrder,
+  Product,
   RoutePlan,
   RouteRun,
   RouteStop,
@@ -41,6 +43,19 @@ type CapacityMetrics = {
 type OrderScheduleDraft = {
   dispatch_date: string
   delivery_slot_id: number
+}
+
+type ManualOrderLineDraft = {
+  productId: number
+  quantity: string
+}
+
+type ManualOrderPayload = {
+  commerce: number
+  dispatch_date: string
+  delivery_slot: number
+  notes: string
+  line_items: Array<{ product_id: number; quantity: string }>
 }
 
 type RouteFilterSummary = {
@@ -71,6 +86,7 @@ const orderStatusPriority: Record<string, number> = {
 export function DashboardOrdersRoutingPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [commerces, setCommerces] = useState<Commerce[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [deliverySlots, setDeliverySlots] = useState<DistributorDeliverySlot[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [slotFilter, setSlotFilter] = useState('ALL')
@@ -82,6 +98,9 @@ export function DashboardOrdersRoutingPage() {
   const [drafts, setDrafts] = useState<Record<number, OrderScheduleDraft>>({})
   const [savingOrderId, setSavingOrderId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [manualOrderOpen, setManualOrderOpen] = useState(false)
+  const [manualOrderSaving, setManualOrderSaving] = useState(false)
+  const [manualOrderError, setManualOrderError] = useState<string | null>(null)
   const showError = useFeedbackStore((state) => state.error)
   const showSuccess = useFeedbackStore((state) => state.success)
   const confirm = useFeedbackStore((state) => state.confirm)
@@ -89,6 +108,8 @@ export function DashboardOrdersRoutingPage() {
     () => deliverySlots.filter((slot) => slot.active).sort((left, right) => left.sort_order - right.sort_order || left.start_time.localeCompare(right.start_time)),
     [deliverySlots],
   )
+  const activeCustomers = useMemo(() => commerces.filter((commerce) => commerce.active), [commerces])
+  const activeProducts = useMemo(() => products.filter((product) => product.active), [products])
   const commerceById = useMemo(() => new Map(commerces.map((commerce) => [commerce.id, commerce])), [commerces])
   const visibleOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -124,10 +145,11 @@ export function DashboardOrdersRoutingPage() {
     async function load() {
       setLoading(true)
       try {
-        const [loadedOrders, loadedSlots] = await Promise.all([api.orders(), api.deliverySlots()])
+        const [loadedOrders, loadedSlots, loadedProducts] = await Promise.all([api.orders(), api.deliverySlots(), api.products()])
         if (disposed) return
         setOrders(loadedOrders)
         setDeliverySlots(loadedSlots)
+        setProducts(loadedProducts)
         void api
           .commerces()
           .then((loadedCommerces) => {
@@ -284,12 +306,43 @@ export function DashboardOrdersRoutingPage() {
     }
   }
 
+  async function createManualOrder(payload: ManualOrderPayload) {
+    setManualOrderSaving(true)
+    setManualOrderError(null)
+    try {
+      const created = await api.createOrder(payload)
+      setOrders((current) => [created, ...current])
+      setManualOrderOpen(false)
+      setStatusFilter('IN_PROGRESS')
+      setDateFilter(created.dispatch_date)
+      setSlotFilter(created.delivery_slot ? String(created.delivery_slot) : 'ALL')
+      showSuccess('Pedido manual creado y listo para ruteo.')
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'No se pudo crear el pedido manual.'
+      setManualOrderError(message)
+      showError(message)
+    } finally {
+      setManualOrderSaving(false)
+    }
+  }
+
   return (
     <section className="grid gap-5">
       <div className="grid gap-4 border-b border-slate-200 pb-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
         <div className="max-w-3xl">
           <p className="text-xs font-800 uppercase tracking-[0.14em] text-brand-700">Distribuidora</p>
           <h1 className="mt-1 text-2xl font-800 text-slate-950">Pedidos de distribuidora</h1>
+          <button
+            className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md bg-brand-600 px-4 text-sm font-800 text-white transition hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+            type="button"
+            onClick={() => {
+              setManualOrderError(null)
+              setManualOrderOpen(true)
+            }}
+          >
+            <Icon name="plus" className="h-4 w-4" />
+            Crear pedido
+          </button>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <OrderMetric active={statusFilter === 'ALL'} label="Total" value={metrics.total} onClick={() => setStatusFilter('ALL')} />
@@ -424,6 +477,17 @@ export function DashboardOrdersRoutingPage() {
           order={selectedCustomerOrder}
           customer={commerceById.get(selectedCustomerOrder.commerce) ?? null}
           onClose={() => setSelectedCustomerOrder(null)}
+        />
+      ) : null}
+      {manualOrderOpen ? (
+        <ManualOrderModal
+          activeSlots={activeSlots}
+          customers={activeCustomers}
+          error={manualOrderError}
+          products={activeProducts}
+          saving={manualOrderSaving}
+          onClose={() => setManualOrderOpen(false)}
+          onSubmit={(payload) => void createManualOrder(payload)}
         />
       ) : null}
     </section>
@@ -643,6 +707,381 @@ function CustomerInfoRow({ label, value }: { label: string; value: string | numb
     <div className="grid gap-1">
       <dt className="text-[11px] font-800 uppercase text-slate-500">{label}</dt>
       <dd className="break-words text-sm font-700 leading-6 text-slate-900">{displayValue(value)}</dd>
+    </div>
+  )
+}
+
+function ManualOrderModal({
+  customers,
+  products,
+  activeSlots,
+  saving,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  customers: Commerce[]
+  products: Product[]
+  activeSlots: DistributorDeliverySlot[]
+  saving: boolean
+  error: string | null
+  onClose: () => void
+  onSubmit: (payload: ManualOrderPayload) => void
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [commerceId, setCommerceId] = useState<number | ''>('')
+  const [dispatchDate, setDispatchDate] = useState(defaultRouteDate())
+  const [deliverySlotId, setDeliverySlotId] = useState<number | ''>(activeSlots[0]?.id ?? '')
+  const [notes, setNotes] = useState('')
+  const [productQuery, setProductQuery] = useState('')
+  const [selectedProductId, setSelectedProductId] = useState<number | ''>('')
+  const [quantity, setQuantity] = useState('1')
+  const [lines, setLines] = useState<ManualOrderLineDraft[]>([])
+  const [localError, setLocalError] = useState<string | null>(null)
+  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
+  const selectedProduct = selectedProductId ? productById.get(selectedProductId) ?? null : null
+  const normalizedCustomerQuery = customerQuery.trim().toLocaleLowerCase()
+  const normalizedProductQuery = productQuery.trim().toLocaleLowerCase()
+  const filteredCustomers = customers.filter((customer) => {
+    if (!normalizedCustomerQuery) return true
+    return [customer.trade_name, customer.legal_name, customer.tax_id, customer.contact_name, customer.address]
+      .filter(Boolean)
+      .some((value) => value.toLocaleLowerCase().includes(normalizedCustomerQuery))
+  })
+  const filteredProducts = products.filter((product) => {
+    if (!normalizedProductQuery) return true
+    return [product.name, product.sku, product.brand, product.category, product.subcategory]
+      .filter(Boolean)
+      .some((value) => value.toLocaleLowerCase().includes(normalizedProductQuery))
+  })
+  const total = lines.reduce((sum, line) => {
+    const product = productById.get(line.productId)
+    return sum + Number(product?.price ?? 0) * Number(line.quantity || 0)
+  }, 0)
+  const totalUnits = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0)
+
+  useEffect(() => {
+    closeButtonRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
+  useEffect(() => {
+    if (!deliverySlotId && activeSlots[0]) setDeliverySlotId(activeSlots[0].id)
+  }, [activeSlots, deliverySlotId])
+
+  function addLine() {
+    if (!selectedProduct) {
+      setLocalError('Selecciona un articulo.')
+      return
+    }
+    const nextQuantity = Number(quantity)
+    if (!Number.isFinite(nextQuantity) || nextQuantity <= 0) {
+      setLocalError('Ingresa una cantidad mayor a cero.')
+      return
+    }
+    const available = productAvailable(selectedProduct)
+    const currentQuantity = Number(lines.find((line) => line.productId === selectedProduct.id)?.quantity ?? 0)
+    if (available <= 0 || currentQuantity + nextQuantity > available) {
+      setLocalError(`Stock disponible para ${selectedProduct.name}: ${formatQuantity(available)}.`)
+      return
+    }
+    setLines((current) => {
+      const existing = current.find((line) => line.productId === selectedProduct.id)
+      if (existing) {
+        return current.map((line) =>
+          line.productId === selectedProduct.id
+            ? { ...line, quantity: trimQuantity(currentQuantity + nextQuantity) }
+            : line,
+        )
+      }
+      return [...current, { productId: selectedProduct.id, quantity: trimQuantity(nextQuantity) }]
+    })
+    setSelectedProductId('')
+    setQuantity('1')
+    setLocalError(null)
+  }
+
+  function updateLineQuantity(productId: number, value: string) {
+    const product = productById.get(productId)
+    const nextQuantity = Number(value)
+    if (product && Number.isFinite(nextQuantity) && nextQuantity > productAvailable(product)) {
+      setLocalError(`Stock disponible para ${product.name}: ${formatQuantity(productAvailable(product))}.`)
+    } else {
+      setLocalError(null)
+    }
+    setLines((current) => current.map((line) => (line.productId === productId ? { ...line, quantity: value } : line)))
+  }
+
+  function removeLine(productId: number) {
+    setLines((current) => current.filter((line) => line.productId !== productId))
+    setLocalError(null)
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!commerceId) {
+      setLocalError('Selecciona un cliente registrado.')
+      return
+    }
+    if (!dispatchDate) {
+      setLocalError('Selecciona la fecha de entrega.')
+      return
+    }
+    if (!deliverySlotId) {
+      setLocalError('Selecciona una franja horaria.')
+      return
+    }
+    if (lines.length === 0) {
+      setLocalError('Agrega al menos un articulo.')
+      return
+    }
+    const invalidLine = lines.find((line) => {
+      const product = productById.get(line.productId)
+      const nextQuantity = Number(line.quantity)
+      return !product || !Number.isFinite(nextQuantity) || nextQuantity <= 0 || nextQuantity > productAvailable(product)
+    })
+    if (invalidLine) {
+      setLocalError('Revisa las cantidades antes de crear el pedido.')
+      return
+    }
+    setLocalError(null)
+    onSubmit({
+      commerce: Number(commerceId),
+      dispatch_date: dispatchDate,
+      delivery_slot: Number(deliverySlotId),
+      notes,
+      line_items: lines.map((line) => ({ product_id: line.productId, quantity: line.quantity })),
+    })
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[1300] grid place-items-end bg-slate-950/50 p-0 sm:place-items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="manual-order-title"
+      onClick={onClose}
+    >
+      <form
+        className="max-h-dvh w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white shadow-[0_36px_80px_-32px_rgba(15,23,42,0.45)] sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-lg"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={submit}
+      >
+        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 sm:p-5">
+          <div className="min-w-0">
+            <p className="text-xs font-800 uppercase tracking-[0.12em] text-brand-700">Pedido manual</p>
+            <h2 id="manual-order-title" className="mt-1 text-xl font-800 text-slate-950">
+              Crear pedido manual
+            </h2>
+            <p className="mt-1 text-sm font-700 text-slate-500">Queda aceptado para entrar al ruteo de la fecha y franja elegidas.</p>
+          </div>
+          <button
+            ref={closeButtonRef}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar pedido manual"
+          >
+            <Icon name="close" className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_20rem] sm:p-5">
+          <section className="grid content-start gap-4">
+            <div>
+              <h3 className="text-sm font-800 text-slate-950">Cliente y entrega</h3>
+              <p className="mt-1 text-xs font-700 text-slate-500">{customers.length} clientes registrados</p>
+            </div>
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Buscar cliente
+              <input
+                className="min-h-11 rounded-md border border-slate-300 px-3"
+                type="search"
+                value={customerQuery}
+                placeholder="Nombre, CUIT o direccion"
+                onChange={(event) => setCustomerQuery(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Cliente
+              <select
+                className="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+                value={commerceId}
+                onChange={(event) => setCommerceId(event.target.value ? Number(event.target.value) : '')}
+              >
+                <option value="">Seleccionar cliente</option>
+                {filteredCustomers.map((customer) => (
+                  <option key={customer.id} value={customer.id} disabled={!customerCanReceiveOrder(customer)}>
+                    {customer.trade_name}{customerCanReceiveOrder(customer) ? '' : ' - sin coordenadas'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {customers.length === 0 ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-800 text-amber-900">No hay clientes activos cargados.</p>
+            ) : null}
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Fecha de entrega
+              <input className="min-h-11 rounded-md border border-slate-300 px-3" type="date" value={dispatchDate} onChange={(event) => setDispatchDate(event.target.value)} />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => setDispatchDate(addDaysIso(0))}>
+                Hoy
+              </button>
+              <button className="min-h-9 rounded-md border border-slate-200 bg-white px-3 text-xs font-800 text-slate-600 transition hover:border-brand-300 hover:text-brand-700" type="button" onClick={() => setDispatchDate(addDaysIso(1))}>
+                Maniana
+              </button>
+            </div>
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Franja horaria
+              <select
+                className="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+                value={deliverySlotId}
+                onChange={(event) => setDeliverySlotId(event.target.value ? Number(event.target.value) : '')}
+              >
+                <option value="">Seleccionar franja</option>
+                {activeSlots.map((slot) => (
+                  <option key={slot.id} value={slot.id}>
+                    {deliverySlotLabel(slot)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {activeSlots.length === 0 ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-800 text-amber-900">Carga una franja activa antes de crear pedidos manuales.</p>
+            ) : null}
+          </section>
+
+          <section className="grid content-start gap-4">
+            <div>
+              <h3 className="text-sm font-800 text-slate-950">Articulos</h3>
+              <p className="mt-1 text-xs font-700 text-slate-500">{products.length} articulos activos</p>
+            </div>
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Buscar articulo
+              <input
+                className="min-h-11 rounded-md border border-slate-300 px-3"
+                type="search"
+                value={productQuery}
+                placeholder="Nombre, SKU, marca o categoria"
+                onChange={(event) => setProductQuery(event.target.value)}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
+              <label className="grid gap-1 text-sm font-700 text-slate-700">
+                Articulo
+                <select
+                  className="min-h-11 rounded-md border border-slate-300 bg-white px-3"
+                  value={selectedProductId}
+                  onChange={(event) => setSelectedProductId(event.target.value ? Number(event.target.value) : '')}
+                >
+                  <option value="">Seleccionar articulo</option>
+                  {filteredProducts.slice(0, 80).map((product) => (
+                    <option key={product.id} value={product.id} disabled={productAvailable(product) <= 0}>
+                      {product.sku ? `${product.sku} - ` : ''}{product.name} - disp. {formatQuantity(productAvailable(product))}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-sm font-700 text-slate-700">
+                Cantidad
+                <input
+                  className="min-h-11 rounded-md border border-slate-300 px-3"
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  max={selectedProduct ? productAvailable(selectedProduct) : undefined}
+                  value={quantity}
+                  onChange={(event) => setQuantity(event.target.value)}
+                />
+              </label>
+              <button className="min-h-11 rounded-md border border-brand-200 px-4 text-sm font-800 text-brand-700 transition hover:bg-brand-50" type="button" onClick={addLine}>
+                Agregar
+              </button>
+            </div>
+
+            <div className="grid gap-2">
+              {lines.length === 0 ? (
+                <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm font-700 text-slate-500">Sin articulos seleccionados.</p>
+              ) : (
+                lines.map((line) => {
+                  const product = productById.get(line.productId)
+                  if (!product) return null
+                  return (
+                    <div key={line.productId} className="grid gap-3 rounded-md border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-800 text-slate-950">{product.name}</p>
+                        <p className="mt-1 text-xs font-700 text-slate-500">
+                          {product.sku ? `SKU ${product.sku} - ` : ''}{formatMoney(product.price)} por {product.unit || 'unidad'}
+                        </p>
+                      </div>
+                      <label className="grid gap-1 text-xs font-800 text-slate-600">
+                        Cantidad
+                        <input
+                          className="min-h-10 rounded-md border border-slate-300 px-3 text-sm"
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          max={productAvailable(product)}
+                          value={line.quantity}
+                          aria-label={`Cantidad ${product.name}`}
+                          onChange={(event) => updateLineQuantity(line.productId, event.target.value)}
+                        />
+                      </label>
+                      <button className="min-h-10 rounded-md border border-red-200 px-3 text-xs font-800 text-red-700" type="button" onClick={() => removeLine(line.productId)}>
+                        Quitar
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </section>
+
+          <aside className="grid content-start gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-800 text-slate-950">Resumen</h3>
+            <dl className="grid gap-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <dt className="font-700 text-slate-500">Articulos</dt>
+                <dd className="font-800 text-slate-950">{lines.length}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="font-700 text-slate-500">Unidades</dt>
+                <dd className="font-800 text-slate-950">{formatQuantity(totalUnits)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+                <dt className="font-800 text-slate-700">Total estimado</dt>
+                <dd className="text-lg font-800 text-slate-950">{formatMoney(total)}</dd>
+              </div>
+            </dl>
+            <label className="grid gap-1 text-sm font-700 text-slate-700">
+              Notas
+              <textarea className="min-h-28 rounded-md border border-slate-300 bg-white px-3 py-2" value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </label>
+            {localError || error ? (
+              <p className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-800 text-red-700" role="alert">
+                {localError || error}
+              </p>
+            ) : null}
+            <button className="min-h-12 rounded-md bg-brand-600 px-4 text-sm font-800 text-white disabled:bg-slate-300 disabled:text-slate-600" type="submit" disabled={saving}>
+              {saving ? 'Creando...' : 'Crear pedido manual'}
+            </button>
+          </aside>
+        </div>
+      </form>
     </div>
   )
 }
@@ -2475,6 +2914,18 @@ function isOrderRouteLocked(order: Order) {
 
 function routeLockMessage(order: Order) {
   return `El pedido esta dentro de la ${order.route_lock_label || 'HR'}. Quitalo de la HR para modificarlo.`
+}
+
+function customerCanReceiveOrder(customer: Commerce) {
+  return Boolean(customer.latitude && customer.longitude)
+}
+
+function productAvailable(product: Product) {
+  return Math.max(0, Number(product.stock_available ?? 0))
+}
+
+function trimQuantity(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function slotFilterMatches(order: Order, filterId: string) {

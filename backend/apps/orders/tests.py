@@ -181,6 +181,98 @@ class DistroMaxiFlowTests(TestCase):
         self.assertEqual(str(order.delivery_window_start), "08:00:00")
         self.assertEqual(str(order.delivery_window_end), "12:00:00")
 
+    def test_distributor_creates_manual_order_for_registered_customer(self):
+        slot = DistributorDeliverySlot.objects.create(
+            distributor=self.distributor,
+            name="Maniana",
+            start_time="08:00",
+            end_time="12:00",
+            sort_order=1,
+        )
+        dispatch_date = date.today() + timedelta(days=3)
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.post(
+            "/api/orders/",
+            {
+                "commerce": self.commerce.id,
+                "dispatch_date": dispatch_date.isoformat(),
+                "delivery_slot": slot.id,
+                "notes": "Pedido tomado por telefono",
+                "line_items": [{"product_id": self.product.id, "quantity": "2.000"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "ACCEPTED")
+        self.assertEqual(response.data["commerce"], self.commerce.id)
+        self.assertEqual(response.data["delivery_slot"], slot.id)
+        self.assertEqual(response.data["dispatch_date"], dispatch_date.isoformat())
+        self.assertEqual(response.data["delivery_address"], self.commerce.address)
+        self.assertEqual(response.data["delivery_window_start"], "08:00:00")
+        self.assertEqual(response.data["delivery_window_end"], "12:00:00")
+        self.assertEqual(len(response.data["items"]), 1)
+        stock = StockItem.objects.get(product=self.product)
+        self.assertEqual(stock.reserved_quantity, Decimal("2.000"))
+
+    def test_distributor_cannot_create_manual_order_for_another_distributors_customer(self):
+        other_user = User.objects.create_user(
+            email="other-dist@test.local",
+            password="Demo1234!",
+            full_name="Otro distribuidor",
+            role="DISTRIBUTOR",
+        )
+        other_distributor = Distributor.objects.create(
+            owner=other_user,
+            business_name="Otra Distro",
+            tax_id="30-2",
+            contact_name="Ventas",
+            email="other-dist@test.local",
+            phone="444",
+            address="Base 2",
+            subscription_status="ACTIVE",
+            service_area_mode="COUNTRY",
+            service_area_country="AR",
+        )
+        other_commerce = Commerce.objects.create(
+            distributor=other_distributor,
+            trade_name="Cliente externo",
+            tax_id="20-2",
+            contact_name="Compras",
+            phone="555",
+            postal_code="1414",
+            address="Cliente externo",
+            city="CABA",
+            province="CABA",
+            latitude=Decimal("-34.5841000"),
+            longitude=Decimal("-58.4351000"),
+        )
+        slot = DistributorDeliverySlot.objects.create(
+            distributor=self.distributor,
+            name="Maniana",
+            start_time="08:00",
+            end_time="12:00",
+            sort_order=1,
+        )
+        self.client.force_authenticate(self.distributor_user)
+
+        response = self.client.post(
+            "/api/orders/",
+            {
+                "commerce": other_commerce.id,
+                "dispatch_date": (date.today() + timedelta(days=3)).isoformat(),
+                "delivery_slot": slot.id,
+                "line_items": [{"product_id": self.product.id, "quantity": "1.000"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("commerce", response.data)
+        stock = StockItem.objects.get(product=self.product)
+        self.assertEqual(stock.reserved_quantity, Decimal("0.000"))
+
     def test_order_inside_route_plan_cannot_be_modified_until_removed_from_route(self):
         slot = DistributorDeliverySlot.objects.create(
             distributor=self.distributor,

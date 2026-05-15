@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -864,6 +864,97 @@ describe('DistroMaxi frontend flows', () => {
     expect(await screen.findByText(/quitalo de la hr para modificarlo/i)).toBeInTheDocument()
     expect(screen.getByText(/en HR-000011/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ajustar entrega/i })).not.toBeInTheDocument()
+  })
+
+  it('lets distributors create manual orders for registered customers', async () => {
+    vi.mocked(fetch).mockImplementation((input, options) => {
+      const url = String(input)
+      if (url.includes('/orders/') && options?.method === 'POST') {
+        return jsonResponse({
+          ...customerSummaryOrder,
+          id: 44,
+          status: 'ACCEPTED',
+          delivery_slot: 8,
+          delivery_slot_name: 'Maniana',
+          delivery_slot_start_time: '08:00:00',
+          delivery_slot_end_time: '12:00:00',
+          dispatch_date: '2026-04-22',
+          total: '6500.00',
+          items: [
+            {
+              id: 77,
+              product: 1,
+              product_name: 'Agua mineral 1.5L x 6',
+              sku: 'SKU-1',
+              quantity: '2.000',
+              price: '3250.00',
+              subtotal: '6500.00',
+              weight_kg: '16.000',
+              volume_m3: '0.600000',
+            },
+          ],
+        })
+      }
+      if (url.includes('/orders/')) return jsonResponse([])
+      if (url.includes('/commerces/')) return jsonResponse([customerSummaryCommerce])
+      if (url.includes('/products/')) return jsonResponse([product])
+      if (url.includes('/delivery-slots/')) {
+        return jsonResponse([
+          {
+            id: 8,
+            distributor: 1,
+            name: 'Maniana',
+            start_time: '08:00:00',
+            end_time: '12:00:00',
+            active: true,
+            sort_order: 1,
+            created_at: '2026-04-21T10:00:00.000Z',
+            updated_at: '2026-04-21T10:00:00.000Z',
+          },
+        ])
+      }
+      return jsonResponse([])
+    })
+
+    renderWithFeedback(
+      <MemoryRouter>
+        <DashboardOrdersRoutingPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/products/'))).toBe(true)
+      expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/commerces/'))).toBe(true)
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /^crear pedido$/i }))
+    const dialog = screen.getByRole('dialog', { name: /crear pedido manual/i })
+    expect(dialog).toBeInTheDocument()
+
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^cliente$/i), '1')
+    await userEvent.clear(within(dialog).getByLabelText(/fecha de entrega/i))
+    await userEvent.type(within(dialog).getByLabelText(/fecha de entrega/i), '2026-04-22')
+    await userEvent.selectOptions(within(dialog).getByLabelText(/franja horaria/i), '8')
+    await userEvent.type(within(dialog).getByLabelText(/buscar articulo/i), 'Agua')
+    await userEvent.selectOptions(within(dialog).getByLabelText(/^articulo$/i), '1')
+    await userEvent.clear(within(dialog).getByLabelText(/^cantidad$/i))
+    await userEvent.type(within(dialog).getByLabelText(/^cantidad$/i), '2')
+    await userEvent.click(within(dialog).getByRole('button', { name: /agregar/i }))
+    await userEvent.click(within(dialog).getByRole('button', { name: /crear pedido manual/i }))
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(fetch)
+        .mock.calls.find(([url, options]) => String(url).includes('/orders/') && options?.method === 'POST')
+      expect(createCall).toBeTruthy()
+      expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+        commerce: 1,
+        dispatch_date: '2026-04-22',
+        delivery_slot: 8,
+        line_items: [{ product_id: 1, quantity: '2' }],
+      })
+    })
+    expect(await screen.findByText(/pedido manual creado/i)).toBeInTheDocument()
   })
 
   it('shows intelligent stock suggestions and records cycle counts', async () => {

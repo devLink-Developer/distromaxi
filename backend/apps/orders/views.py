@@ -28,7 +28,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         if user.role == "COMMERCE" and hasattr(user, "commerce_profile"):
             serializer.save(commerce=user.commerce_profile)
         elif user.role == "DISTRIBUTOR":
-            serializer.save(distributor=get_user_distributor(user))
+            serializer.save(distributor=get_user_distributor(user), status=OrderStatus.ACCEPTED)
         else:
             serializer.save()
 
