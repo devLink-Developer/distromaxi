@@ -38,7 +38,7 @@ services:
       ROUTING_PROVIDER: "${ROUTING_PROVIDER:-ors}"
       ROUTING_SERVICE_MINUTES_PER_STOP: "${ROUTING_SERVICE_MINUTES_PER_STOP:-10}"
       WAREHOUSE_ORIGINS: "${WAREHOUSE_ORIGINS:-}"
-      DJANGO_SEED_DEMO: "${DJANGO_SEED_DEMO:-1}"
+      DJANGO_SEED_DEMO: "${DJANGO_SEED_DEMO:-0}"
     depends_on:
       db:
         condition: service_healthy

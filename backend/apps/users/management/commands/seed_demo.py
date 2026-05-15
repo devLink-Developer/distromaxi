@@ -203,7 +203,7 @@ class Command(BaseCommand):
             },
         )
         product_map = {product.sku: product for product in Product.objects.filter(distributor=distributor)}
-        delivered_order, _ = Order.objects.update_or_create(
+        delivered_order = self._demo_order(
             distributor=distributor,
             commerce=commerce,
             notes="Pedido demo dashboard 1",
@@ -219,14 +219,18 @@ class Command(BaseCommand):
                 "delivery_window_end": morning_slot.end_time,
             },
         )
-        delivered_order.items.all().delete()
-        self._item(delivered_order, product_map["SKU-AGUA-1500"], Decimal("4.000"))
-        self._item(delivered_order, product_map["SKU-GASEOSA-225"], Decimal("2.000"))
+        self._sync_demo_items(
+            delivered_order,
+            [
+                (product_map["SKU-AGUA-1500"], Decimal("4.000")),
+                (product_map["SKU-GASEOSA-225"], Decimal("2.000")),
+            ],
+        )
         Delivery.objects.update_or_create(
             order=delivered_order,
             defaults={"driver": driver, "vehicle": vehicle, "status": "DELIVERED"},
         )
-        pending_order, _ = Order.objects.update_or_create(
+        pending_order = self._demo_order(
             distributor=distributor,
             commerce=commerce,
             notes="Pedido demo dashboard 2",
@@ -242,9 +246,13 @@ class Command(BaseCommand):
                 "delivery_window_end": morning_slot.end_time,
             },
         )
-        pending_order.items.all().delete()
-        self._item(pending_order, product_map["SKU-ACEITE-900"], Decimal("1.000"))
-        self._item(pending_order, product_map["SKU-YERBA-1KG"], Decimal("1.000"))
+        self._sync_demo_items(
+            pending_order,
+            [
+                (product_map["SKU-ACEITE-900"], Decimal("1.000")),
+                (product_map["SKU-YERBA-1KG"], Decimal("1.000")),
+            ],
+        )
 
         self.stdout.write(self.style.SUCCESS("Datos demo cargados. Password demo: Demo1234!"))
         self.stdout.write(f"Admin: {admin.email}")
@@ -264,13 +272,43 @@ class Command(BaseCommand):
                 "is_superuser": is_superuser,
             },
         )
-        if created:
-            user.set_password("Demo1234!")
-            user.save()
+        user.full_name = full_name
+        user.role = role
+        user.phone = user.phone or "+54 11 5555-0000"
+        user.is_active = True
+        user.is_staff = is_staff
+        user.is_superuser = is_superuser
+        user.set_password("Demo1234!")
+        user.save(update_fields=["full_name", "role", "phone", "is_active", "is_staff", "is_superuser", "password", "updated_at"])
         return user
 
+    def _demo_order(self, *, distributor, commerce, notes, defaults):
+        order = (
+            Order.objects.filter(distributor=distributor, commerce=commerce, notes=notes)
+            .order_by("id")
+            .first()
+        )
+        if order is None:
+            return Order.objects.create(distributor=distributor, commerce=commerce, notes=notes, **defaults)
+        for field, value in defaults.items():
+            setattr(order, field, value)
+        order.save(update_fields=[*defaults.keys(), "updated_at"])
+        return order
+
+    def _sync_demo_items(self, order, lines):
+        total = Decimal("0.00")
+        for product, quantity in lines:
+            item = order.items.filter(product=product).order_by("id").first()
+            if item is None:
+                item = self._item(order, product, quantity)
+            else:
+                self._update_item(item, product, quantity)
+            total += Decimal(item.subtotal)
+        order.total = total
+        order.save(update_fields=["total", "updated_at"])
+
     def _item(self, order, product, quantity):
-        OrderItem.objects.create(
+        return OrderItem.objects.create(
             order=order,
             product=product,
             product_name=product.name,
@@ -281,6 +319,18 @@ class Command(BaseCommand):
             weight_kg=self._weight_total_kg(product, quantity),
             volume_m3=self._volume_total_m3(product, quantity),
         )
+
+    def _update_item(self, item, product, quantity):
+        item.product = product
+        item.product_name = product.name
+        item.sku = product.sku
+        item.quantity = quantity
+        item.price = product.price
+        item.subtotal = Decimal(product.price) * Decimal(quantity)
+        item.weight_kg = self._weight_total_kg(product, quantity)
+        item.volume_m3 = self._volume_total_m3(product, quantity)
+        item.save(update_fields=["product", "product_name", "sku", "quantity", "price", "subtotal", "weight_kg", "volume_m3"])
+        return item
 
     def _weight_total_kg(self, product, quantity):
         factor = Decimal("0.001") if product.weight_unit == "g" else Decimal("1")
