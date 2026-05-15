@@ -22,9 +22,9 @@ class RoutingFlowTests(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.distributor_user = User.objects.create_user(
-            email="pro@test.local",
+            email="maxigestion@test.local",
             password="Demo1234!",
-            full_name="Distribuidora Pro",
+            full_name="Distribuidora MaxiGestion",
             role="DISTRIBUTOR",
         )
         self.driver_user = User.objects.create_user(
@@ -35,25 +35,25 @@ class RoutingFlowTests(TestCase):
         )
         self.distributor = Distributor.objects.create(
             owner=self.distributor_user,
-            business_name="Distribuidora Pro",
+            business_name="Distribuidora MaxiGestion",
             tax_id="30-123",
             contact_name="Ventas",
-            email="pro@test.local",
+            email="maxigestion@test.local",
             phone="111",
             address="Base",
             city="CABA",
             province="CABA",
             latitude=Decimal("-34.6037220"),
             longitude=Decimal("-58.3815920"),
-            plan_name="Pro",
+            plan_name="MaxiGestion",
             subscription_status="ACTIVE",
             active=True,
         )
         plan, _ = Plan.objects.update_or_create(
-            name="Pro",
+            name="MaxiGestion",
             defaults={
                 "price": Decimal("1.00"),
-                "description": "Pro",
+                "description": "MaxiGestion",
                 "currency": "ARS",
                 "is_active": True,
                 "sort_order": 1,
@@ -498,15 +498,7 @@ class RoutingFlowTests(TestCase):
         self.assertEqual([item["order"] for item in response.data["runs"][0]["stops"]], [self.order.id, second_order.id])
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
-    def test_manual_routing_is_allowed_for_standard_plan(self):
-        standard_plan, _ = Plan.objects.update_or_create(
-            name="Standard",
-            defaults={"price": Decimal("1.00"), "description": "Standard", "currency": "ARS", "is_active": True, "sort_order": 1},
-        )
-        self.distributor.subscription.plan = standard_plan
-        self.distributor.subscription.save(update_fields=["plan"])
-        self.distributor.plan_name = "Standard"
-        self.distributor.save(update_fields=["plan_name", "updated_at"])
+    def test_manual_routing_is_allowed_for_maxigestion_plan(self):
         self.client.force_authenticate(self.distributor_user)
 
         pending_response = self.client.get(f"/api/route-plans/pending-orders/?dispatch_date={self.order.dispatch_date.isoformat()}")
@@ -528,28 +520,22 @@ class RoutingFlowTests(TestCase):
         self.assertEqual(manual_response.status_code, 201)
         self.assertEqual(manual_response.data["provider"], "manual")
         self.assertEqual(manual_response.data["routing_status"], "manual")
-        self.assertEqual(automatic_response.status_code, 403)
+        self.assertEqual(automatic_response.status_code, 201)
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")
-    def test_automatic_routing_is_blocked_for_plus_plan(self):
-        plus_plan, _ = Plan.objects.update_or_create(
-            name="Plus",
-            defaults={"price": Decimal("2.00"), "description": "Plus", "currency": "ARS", "is_active": True, "sort_order": 2},
-        )
-        self.distributor.subscription.plan = plus_plan
-        self.distributor.subscription.save(update_fields=["plan"])
-        self.distributor.plan_name = "Plus"
-        self.distributor.save(update_fields=["plan_name", "updated_at"])
+    def test_automatic_routing_is_blocked_without_active_maxigestion_plan(self):
+        self.distributor.subscription.status = "SUSPENDED"
+        self.distributor.subscription.save(update_fields=["status"])
+        self.distributor.subscription_status = "SUSPENDED"
+        self.distributor.save(update_fields=["subscription_status", "updated_at"])
         self.client.force_authenticate(self.distributor_user)
 
-        pending_response = self.client.get(f"/api/route-plans/pending-orders/?dispatch_date={self.order.dispatch_date.isoformat()}")
         automatic_response = self.client.post(
             "/api/route-plans/generate/",
             {"dispatch_date": self.order.dispatch_date.isoformat()},
             format="json",
         )
 
-        self.assertEqual(pending_response.status_code, 200)
         self.assertEqual(automatic_response.status_code, 403)
 
     @override_settings(ORS_API_KEY="", OPENROUTESERVICE_API_KEY="")

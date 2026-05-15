@@ -193,7 +193,7 @@ export function PlansPage() {
               <tbody className="divide-y divide-slate-100">
                 <CompareRow area="Ventas" includes="Catalogo online, clientes y pedidos" result="Tu cartera compra sin depender de llamadas." />
                 <CompareRow area="Operacion" includes="Stock, listas de precios, descuentos y reportes" result="El equipo confirma con datos actualizados." />
-                <CompareRow area="Logistica" includes="Choferes, vehiculos y ruteo manual" result="Las entregas salen ordenadas por recorrido." />
+                <CompareRow area="Logistica" includes="Choferes, vehiculos y ruteo automatico" result="Las entregas salen ordenadas por recorrido." />
                 <CompareRow area="Crecimiento" includes="Preparado para integraciones ERP" result="La prueba no limita tu proxima etapa." />
               </tbody>
             </table>

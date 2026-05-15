@@ -19,7 +19,7 @@ const distributorUser = {
     onboarding_id: 7,
     distributor_id: 3,
     distributor_name: 'Distribuidora Andina',
-    plan_name: 'Pro',
+    plan_name: 'MaxiGestion',
     routing_enabled: true,
     manual_routing_enabled: true,
     automatic_routing_enabled: true,

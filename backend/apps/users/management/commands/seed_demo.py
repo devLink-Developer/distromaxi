@@ -64,7 +64,7 @@ class Command(BaseCommand):
                     "Catalogo online proveedor-comprador",
                     "Dashboard comercial y operativo",
                     "Listas de precios y reportes exportables",
-                    "Ruteo manual para organizar entregas",
+                    "Ruteo automatico y replanificacion",
                 ],
                 "sort_order": 10,
                 "is_featured": True,

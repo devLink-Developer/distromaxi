@@ -808,10 +808,11 @@ export function DashboardRoutingPage() {
   const showSuccess = useFeedbackStore((state) => state.success)
   const showError = useFeedbackStore((state) => state.error)
   const confirm = useFeedbackStore((state) => state.confirm)
+  const distributorPlanKey = String(user?.distributor_access?.plan_name ?? '').replace(/\s+/g, '').toUpperCase()
   const manualRoutingEnabled = user?.role === 'DISTRIBUTOR' ? (user.distributor_access.manual_routing_enabled ?? user.distributor_access.routing_enabled) !== false : true
   const automaticRoutingEnabled =
     user?.role === 'DISTRIBUTOR'
-      ? (user.distributor_access.automatic_routing_enabled ?? ['Pro', 'PRO', 'IA'].includes(String(user.distributor_access.plan_name))) === true
+      ? (user.distributor_access.automatic_routing_enabled ?? distributorPlanKey === 'MAXIGESTION') === true
       : true
   const routingEnabled = manualRoutingEnabled || automaticRoutingEnabled
   const activePlan = useMemo(() => routePlans.find((plan) => plan.status === 'DRAFT') ?? routePlans[0], [routePlans])

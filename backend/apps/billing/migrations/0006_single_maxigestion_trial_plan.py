@@ -15,7 +15,7 @@ PLAN_DEFAULTS = {
         "Gestion de clientes, pedidos y stock",
         "Dashboard comercial y operativo",
         "Listas de precios, descuentos y reportes exportables",
-        "Ruteo manual para organizar entregas",
+        "Ruteo automatico y replanificacion",
         "Preparado para integraciones ERP",
     ],
     "currency": "ARS",
