@@ -877,11 +877,11 @@ function ManualOrderModal({
       onClick={onClose}
     >
       <form
-        className="max-h-dvh w-full overflow-y-auto rounded-t-lg border border-slate-200 bg-white shadow-[0_36px_80px_-32px_rgba(15,23,42,0.45)] sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-lg"
+        className="flex max-h-dvh w-full flex-col overflow-hidden rounded-t-lg border border-slate-200 bg-white shadow-[0_36px_80px_-32px_rgba(15,23,42,0.45)] sm:max-h-[92dvh] sm:max-w-6xl sm:rounded-lg"
         onClick={(event) => event.stopPropagation()}
         onSubmit={submit}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 sm:p-5">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 p-4 sm:p-5">
           <div className="min-w-0">
             <p className="text-xs font-800 uppercase tracking-[0.12em] text-brand-700">Pedido manual</p>
             <h2 id="manual-order-title" className="mt-1 text-xl font-800 text-slate-950">
@@ -900,8 +900,8 @@ function ManualOrderModal({
           </button>
         </header>
 
-        <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_20rem] sm:p-5">
-          <section className="grid content-start gap-4">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(15rem,0.9fr)_minmax(0,1.15fr)_20rem] lg:overflow-hidden sm:p-5">
+          <section className="grid content-start gap-4 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
             <div>
               <h3 className="text-sm font-800 text-slate-950">Cliente y entrega</h3>
               <p className="mt-1 text-xs font-700 text-slate-500">{customers.length} clientes registrados</p>
@@ -958,7 +958,7 @@ function ManualOrderModal({
             ) : null}
           </section>
 
-          <section className="grid content-start gap-4">
+          <section className="grid min-h-0 content-start gap-4 lg:grid-rows-[auto_auto_minmax(0,1fr)_minmax(0,0.78fr)]">
             <div>
               <h3 className="text-sm font-800 text-slate-950">Articulos</h3>
               <p className="mt-1 text-xs font-700 text-slate-500">{products.length} articulos activos</p>
@@ -973,7 +973,7 @@ function ManualOrderModal({
                 onChange={(event) => setProductQuery(event.target.value)}
               />
             </label>
-            <div className="grid max-h-[22rem] gap-2 overflow-y-auto rounded-md border border-slate-200 p-2" role="list" aria-label="Resultados de articulos">
+            <div className="grid min-h-[13rem] max-h-[18rem] gap-2 overflow-y-auto rounded-md border border-slate-200 p-2 lg:max-h-none lg:min-h-0" role="list" aria-label="Resultados de articulos">
               {filteredProducts.length === 0 ? (
                 <p className="px-2 py-3 text-sm font-700 text-slate-500">No hay articulos que coincidan con la busqueda.</p>
               ) : (
@@ -1038,45 +1038,51 @@ function ManualOrderModal({
               )}
             </div>
 
-            <div className="grid gap-2">
-              {lines.length === 0 ? (
-                <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm font-700 text-slate-500">Sin articulos seleccionados.</p>
-              ) : (
-                lines.map((line) => {
-                  const product = productById.get(line.productId)
-                  if (!product) return null
-                  return (
-                    <div key={line.productId} className="grid gap-3 rounded-md border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto] sm:items-center">
-                      <div className="min-w-0">
-                        <p className="break-words text-sm font-800 text-slate-950">{product.name}</p>
-                        <p className="mt-1 text-xs font-700 text-slate-500">
-                          {product.sku ? `SKU ${product.sku} - ` : ''}{formatMoney(product.price)} por {product.unit || 'unidad'}
-                        </p>
+            <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 rounded-md border border-slate-200 bg-white p-2">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <h4 className="text-xs font-800 uppercase text-slate-600">Articulos agregados</h4>
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-800 text-slate-600">{lines.length}</span>
+              </div>
+              <div className="grid min-h-0 gap-2 overflow-y-auto pr-1">
+                {lines.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-slate-300 px-3 py-4 text-sm font-700 text-slate-500">Sin articulos seleccionados.</p>
+                ) : (
+                  lines.map((line) => {
+                    const product = productById.get(line.productId)
+                    if (!product) return null
+                    return (
+                      <div key={line.productId} className="grid gap-3 rounded-md border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-800 text-slate-950">{product.name}</p>
+                          <p className="mt-1 text-xs font-700 text-slate-500">
+                            {product.sku ? `SKU ${product.sku} - ` : ''}{formatMoney(product.price)} por {product.unit || 'unidad'}
+                          </p>
+                        </div>
+                        <label className="grid gap-1 text-xs font-800 text-slate-600">
+                          Cantidad
+                          <input
+                            className="min-h-10 rounded-md border border-slate-300 px-3 text-sm"
+                            type="number"
+                            min="0.001"
+                            step="0.001"
+                            max={productAvailable(product)}
+                            value={line.quantity}
+                            aria-label={`Cantidad ${product.name}`}
+                            onChange={(event) => updateLineQuantity(line.productId, event.target.value)}
+                          />
+                        </label>
+                        <button className="min-h-10 rounded-md border border-red-200 px-3 text-xs font-800 text-red-700" type="button" onClick={() => removeLine(line.productId)}>
+                          Quitar
+                        </button>
                       </div>
-                      <label className="grid gap-1 text-xs font-800 text-slate-600">
-                        Cantidad
-                        <input
-                          className="min-h-10 rounded-md border border-slate-300 px-3 text-sm"
-                          type="number"
-                          min="0.001"
-                          step="0.001"
-                          max={productAvailable(product)}
-                          value={line.quantity}
-                          aria-label={`Cantidad ${product.name}`}
-                          onChange={(event) => updateLineQuantity(line.productId, event.target.value)}
-                        />
-                      </label>
-                      <button className="min-h-10 rounded-md border border-red-200 px-3 text-xs font-800 text-red-700" type="button" onClick={() => removeLine(line.productId)}>
-                        Quitar
-                      </button>
-                    </div>
-                  )
-                })
-              )}
-            </div>
+                    )
+                  })
+                )}
+              </div>
+            </section>
           </section>
 
-          <aside className="grid content-start gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <aside className="grid content-start gap-4 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:min-h-0 lg:overflow-y-auto">
             <h3 className="text-sm font-800 text-slate-950">Resumen</h3>
             <dl className="grid gap-3 text-sm">
               <div className="flex items-center justify-between gap-3">
